@@ -1,6 +1,0 @@
-ResponseID,RevenueBand,Industry,CompanySize,Region,RoleLevel,KPI_IncreaseFocusPct,KPI_PrimaryGoalRevenuePct,KPI_RoleRiskPct,KPI_RevenueGT25Pct,KPI_RevenueGT50Pct,KPI_TeamExpandPct,Q_TechPriority,Q_AccountMapping,Q_BudgetGatePartnerRev
-R1,<$10M,SaaS,1–50,NA,Director,1,1,0,0,0,1,AI / ML,Yes,Yes
-R2,$10–50M,Services,51–200,EMEA,Manager,1,1,1,1,0,0,Account Mapping,No,Yes
-R3,$50–250M,Hardware,201–1000,APAC,VP+,0,1,0,1,1,1,AI / ML,Yes,No
-R4,>$250M,SaaS,1000+,LATAM,IC,1,0,0,0,0,0,Data Integration,Yes,Yes
-R5,$50–250M,Services,201–1000,NA,Director,1,1,1,1,0,1,Account Mapping,Yes,Yes
