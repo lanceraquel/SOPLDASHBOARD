@@ -29,7 +29,7 @@ CFG = {
         "Account Mapping Priority": "Q_AccountMapping",
         "Budget Gate: Partner-sourced Rev": "Q_BudgetGatePartnerRev",
     },
-    "template_path": "data/sopl_2024_template.csv",
+    "template_path": "data/sopl_2024_required_template.csv",
 }
 
 @st.cache_data(show_spinner=False)
