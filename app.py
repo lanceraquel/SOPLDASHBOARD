@@ -1,9 +1,11 @@
+# app.py — SOPL 2024 Interactive Dashboard (robust loader, correct ordering)
+
 import os
+import io
 import numpy as np
 import pandas as pd
 import altair as alt
 import streamlit as st
-import io
 
 # ───────────────────────── Page & Theme ─────────────────────────
 st.set_page_config(page_title="SOPL 2024 – Interactive", page_icon="📊", layout="wide")
@@ -22,62 +24,10 @@ def house_theme():
 alt.themes.register("house", house_theme)
 alt.themes.enable("house")
 
+# Repo fallback path (optional—commit a CSV or XLSX here)
 LOCAL_FALLBACK = "data/SOPL 1002 Results - Raw.csv"
 
-# ─────────────────────── Helpers: parsing & utilities ───────────────────────
-def to_pct_numeric(x):
-    """Convert '42%' or '42' to float 42.0."""
-    if pd.isna(x): return np.nan
-    s = str(x).strip().replace("%","")
-    try: return float(s)
-    except: return np.nan
-
-def map_region_short(x: str) -> str:
-    if pd.isna(x): return x
-    s = str(x)
-    if "North America" in s: return "NA"
-    if "Latin America" in s: return "LATAM"
-    if "Asia-Pacific" in s or "APAC" in s: return "APAC"
-    if "Europe" in s or "EMEA" in s: return "EMEA"
-    return s
-
-def maturity_from_years(x: str) -> str:
-    if pd.isna(x): return "Unknown"
-    s = str(x)
-    if "Less than 1 year" in s: return "Early"
-    if "1-2 year" in s or "1–2 year" in s: return "Early"
-    if "2-3 year" in s or "2–3 year" in s: return "Developing"
-    if "3-5 year" in s or "3–5 year" in s: return "Developing"
-    if "6-10 year" in s or "6–10 year" in s: return "Mature"
-    if "More than 10 years" in s: return "Mature"
-    return "Unknown"
-
-def mid_from_bins(label: str, mapping: dict) -> float | None:
-    """Map a categorical range label to an estimated midpoint using mapping; None if unknown."""
-    if pd.isna(label): return None
-    return mapping.get(str(label).strip(), None)
-
-def median_iqr(s, fmt="{:.1f}"):
-    x = pd.to_numeric(s, errors="coerce").dropna()
-    if x.empty: return ("—","—","0")
-    med = np.median(x)
-    q1, q3 = np.percentile(x, [25, 75])
-    return (fmt.format(med), f"[{fmt.format(q1)}–{fmt.format(q3)}]", f"{len(x)}")
-
-def render_chart(chart: alt.Chart, name: str, height=None):
-    if height is not None:
-        chart = chart.properties(height=height)
-    st.altair_chart(chart, use_container_width=True)
-    # PNG export
-    try:
-        import vl_convert as vlc
-        png = vlc.vegalite_to_png(chart.to_dict(), scale=2)
-        st.download_button(f"Download {name}.png", png, file_name=f"{name}.png", mime="image/png")
-    except Exception:
-        pass
-
-# ─────────────────────── Column mapping from raw (Qualtrics-style) ───────────────────────
-# These MUST match your CSV headers exactly (copied from inspection)
+# ─────────────────────── Raw header mapping (must match your survey) ───────────────────────
 RAW = {
     "company_name": "Company name",
     "region": "Please select the region where your company is headquartered.",
@@ -94,7 +44,7 @@ RAW = {
     "top_challenge": "What's your biggest challenge in scaling your partner program?",
 }
 
-# Midpoint mappings for binned questions (tune if you prefer different midpoints)
+# ─────────────────────── Bin midpoints (tune as needed) ───────────────────────
 EMPLOYEES_MAP = {
     "Less than 100 employees": 50.0,
     "100 – 500 employees": 300.0,
@@ -132,21 +82,70 @@ TTF_REVENUE_MAP = {  # years
     "I don't have this data": np.nan,
 }
 
-# ───────────────────────────── Load & standardize ─────────────────────────────
+# ─────────────────────── Helpers ───────────────────────
+def to_pct_numeric(x):
+    if pd.isna(x): return np.nan
+    s = str(x).strip().replace("%","")
+    try: return float(s)
+    except: return np.nan
+
+def map_region_short(x: str) -> str:
+    if pd.isna(x): return x
+    s = str(x)
+    if "North America" in s: return "NA"
+    if "Latin America" in s: return "LATAM"
+    if "Asia-Pacific" in s or "APAC" in s: return "APAC"
+    if "Europe" in s or "EMEA" in s: return "EMEA"
+    return s
+
+def maturity_from_years(x: str) -> str:
+    if pd.isna(x): return "Unknown"
+    s = str(x)
+    if "Less than 1 year" in s: return "Early"
+    if "1-2 year" in s or "1–2 year" in s: return "Early"
+    if "2-3 year" in s or "2–3 year" in s: return "Developing"
+    if "3-5 year" in s or "3–5 year" in s: return "Developing"
+    if "6-10 year" in s or "6–10 year" in s: return "Mature"
+    if "More than 10 years" in s: return "Mature"
+    return "Unknown"
+
+def mid_from_bins(label: str, mapping: dict) -> float | None:
+    if pd.isna(label): return None
+    return mapping.get(str(label).strip(), None)
+
+def median_iqr(s, fmt="{:.1f}"):
+    x = pd.to_numeric(s, errors="coerce").dropna()
+    if x.empty: return ("—","—","0")
+    med = np.median(x)
+    q1, q3 = np.percentile(x, [25, 75])
+    return (fmt.format(med), f"[{fmt.format(q1)}–{fmt.format(q3)}]", f"{len(x)}")
+
+def render_chart(chart: alt.Chart, name: str, height=None):
+    if height is not None:
+        chart = chart.properties(height=height)
+    st.altair_chart(chart, use_container_width=True)
+    try:
+        import vl_convert as vlc
+        png = vlc.vegalite_to_png(chart.to_dict(), scale=2)
+        st.download_button(f"Download {name}.png", png, file_name=f"{name}.png", mime="image/png")
+    except Exception:
+        pass
+
+# ─────────────────────── Robust loader ───────────────────────
 @st.cache_data(show_spinner=False)
 def load_raw(uploaded):
     """
-    Robust reader for SOPL uploads:
-    - Tries Excel first
-    - For CSV: tries multiple encodings & delimiters
-    - Uses a forgiving parser and skips bad lines
-    - Falls back to LOCAL_FALLBACK if present
+    Robust reader:
+    - Excel first
+    - CSV with multiple encodings/delimiters
+    - forgiving parser; skip bad lines
+    - fallback to LOCAL_FALLBACK
     """
-    # 1) Uploaded file?
+    # Uploaded?
     if uploaded is not None:
         name = (uploaded.name or "").lower()
 
-        # Excel first
+        # Excel?
         if name.endswith((".xlsx", ".xls")):
             try:
                 return pd.read_excel(uploaded)
@@ -155,14 +154,13 @@ def load_raw(uploaded):
 
         # CSV bytes
         try:
-            data = uploaded.getvalue()  # bytes from Streamlit UploadedFile
+            data = uploaded.getvalue()
         except Exception:
-            # Some environments need .read()
             uploaded.seek(0)
             data = uploaded.read()
 
         encodings = ["utf-8-sig", "utf-8", "cp1252", "latin-1"]
-        delimiters = [None, ",", "\t", ";", "|"]  # None lets pandas sniff
+        delimiters = [None, ",", "\t", ";", "|"]  # None = sniff
         for enc in encodings:
             for sep in delimiters:
                 try:
@@ -171,41 +169,49 @@ def load_raw(uploaded):
                         buf,
                         encoding=enc,
                         sep=sep,
-                        engine="python",          # more forgiving
-                        on_bad_lines="skip",      # skip malformed rows
-                        encoding_errors="replace" # avoid hard fail on stray bytes
+                        engine="python",
+                        on_bad_lines="skip",
+                        encoding_errors="replace",
                     )
-                    if df.shape[1] >= 2:  # sanity check
+                    if df.shape[1] >= 2:
                         return df
                 except Exception:
                     continue
+        st.error("Could not decode the uploaded file. If possible, upload XLSX or UTF-8 CSV.")
 
-        st.error("Could not decode the uploaded file with common encodings/delimiters. "
-                 "If this is an Excel export, upload the .xlsx; otherwise re-save as UTF-8 CSV.")
-
-    # 2) Local fallback (repo file) if present
+    # Fallback on repo
     if os.path.exists(LOCAL_FALLBACK):
-        # Try same robust strategy for fallback
         if LOCAL_FALLBACK.lower().endswith((".xlsx", ".xls")):
             try:
                 return pd.read_excel(LOCAL_FALLBACK)
             except Exception as e:
                 st.warning(f"Local Excel fallback failed: {e}")
         try:
-            # try utf-8 first with sniffing
             return pd.read_csv(LOCAL_FALLBACK, sep=None, engine="python")
         except Exception:
-            # try latin encodings
-            for enc in ["utf-8-sig", "cp1252", "latin-1"]:
+            for enc in ["utf-8-sig", "utf-8", "cp1252", "latin-1"]:
                 try:
-                    return pd.read_csv(LOCAL_FALLBACK, encoding=enc, sep=None, engine="python",
-                                       on_bad_lines="skip", encoding_errors="replace")
+                    return pd.read_csv(
+                        LOCAL_FALLBACK,
+                        encoding=enc,
+                        sep=None,
+                        engine="python",
+                        on_bad_lines="skip",
+                        encoding_errors="replace",
+                    )
                 except Exception:
                     continue
             st.error("Local fallback exists but could not be decoded.")
 
-    # 3) give up (caller will st.stop() later)
     return pd.DataFrame()
+
+# ─────────────────────── Standardize (define BEFORE using it) ───────────────────────
+def standardize(df_raw: pd.DataFrame) -> pd.DataFrame:
+    # Validate required raw columns (show exactly what’s missing)
+    missing = [v for v in RAW.values() if v not in df_raw.columns]
+    if missing:
+        st.error("Missing expected columns in CSV:\n- " + "\n- ".join(missing))
+        return pd.DataFrame()
 
     d = pd.DataFrame({
         "company_name": df_raw[RAW["company_name"]],
@@ -239,19 +245,27 @@ def load_raw(uploaded):
 
     return d
 
-# ───────────────────────────── Load UI ─────────────────────────────
+# ─────────────────────── MAIN (runs after all defs exist) ───────────────────────
 with st.sidebar:
     st.header("Data")
-    uploaded = st.file_uploader("Upload SOPL raw CSV", type=["csv"])
+    uploaded = st.file_uploader("Upload SOPL raw CSV or Excel", type=["csv", "xlsx", "xls"])
+
 raw = load_raw(uploaded)
 if raw.empty:
+    st.info("No data loaded yet. Upload a CSV/XLSX or add a repo fallback file at:\n"
+            f"**{LOCAL_FALLBACK}**")
     st.stop()
 
-df = standardize(raw)
+try:
+    df = standardize(raw)
+except Exception as e:
+    st.exception(e)
+    st.stop()
+
 if df.empty:
     st.stop()
 
-# ───────────────────────────── Filters ─────────────────────────────
+# ─────────────────────── Filters ───────────────────────
 with st.sidebar:
     st.header("Filters")
 
@@ -284,7 +298,7 @@ flt = flt[flt["program_maturity"].isin(mat_sel)]
 flt = flt[flt["employee_count_bin"].isin(emp_sel)]
 flt = flt[flt["partner_team_size_bin"].isin(team_sel)]
 
-# ───────────────────────────── KPIs ─────────────────────────────
+# ─────────────────────── KPIs ───────────────────────
 st.title("SOPL 2024 – Interactive Dashboard (Aligned to Survey Questions)")
 
 k1, k2, k3, k4 = st.columns(4)
@@ -323,10 +337,9 @@ g2.metric("Total responses", f"{len(df):,}")
 
 st.divider()
 
-# ───────────────────────── Question 1: Expected partner revenue ─────────────────────────
+# ─────────────────────── Expected partner revenue ───────────────────────
 st.subheader("Expected Partner Revenue — Distributions & Cohorts")
 
-# Violin-like density by maturity
 for cohort_col, title in [("program_maturity", "by Program Maturity"), ("revenue_band", "by Revenue Band")]:
     d = flt[[cohort_col, "expected_partner_revenue_pct"]].dropna()
     if d.empty:
@@ -342,7 +355,6 @@ for cohort_col, title in [("program_maturity", "by Program Maturity"), ("revenue
     ).properties(title=f"Distribution {title}", height=260)
     render_chart(chart, f"expected_rev_{cohort_col}_density")
 
-# Box by region
 d = flt[["region","expected_partner_revenue_pct"]].dropna()
 if not d.empty:
     chart = alt.Chart(d).mark_boxplot().encode(
@@ -354,10 +366,9 @@ if not d.empty:
 
 st.divider()
 
-# ───────────────────────── Question 2–3: Partners & activation ─────────────────────────
+# ─────────────────────── Partners & activation ───────────────────────
 st.subheader("Partner Counts & Activation")
 
-# Activation by revenue band (median)
 d = flt[["revenue_band","partners_active_ratio"]].dropna()
 if not d.empty:
     agg = d.groupby("revenue_band")["partners_active_ratio"].median().reset_index()
@@ -368,7 +379,6 @@ if not d.empty:
     ).properties(title="Activation Ratio by Revenue Band (median)", height=280)
     render_chart(bars, "activation_by_revenue_band")
 
-# Activation by industry (Top 12)
 d2 = flt[["industry","partners_active_ratio"]].dropna()
 if not d2.empty:
     topN = d2["industry"].value_counts().head(12).index.tolist()
@@ -383,7 +393,7 @@ if not d2.empty:
 
 st.divider()
 
-# ───────────────────────── Question 4: Time to first revenue ─────────────────────────
+# ─────────────────────── Time to first revenue ───────────────────────
 st.subheader("Time to First Partner Revenue")
 
 d = flt[["program_maturity","industry","time_to_first_revenue_years"]].dropna()
@@ -404,7 +414,7 @@ if not d.empty:
 
 st.divider()
 
-# ───────────────────────── Question 5: Biggest challenge ─────────────────────────
+# ─────────────────────── Biggest challenge ───────────────────────
 st.subheader("Biggest Challenge × Program Maturity")
 
 d = flt[["top_challenge","program_maturity"]].dropna()
@@ -423,7 +433,7 @@ if not d.empty:
 
 st.divider()
 
-# ───────────────────────── Question 6: Marketplace revenue ─────────────────────────
+# ─────────────────────── Marketplace revenue ───────────────────────
 st.subheader("Cloud Marketplace Revenue by Industry")
 
 d = flt[["industry","marketplace_revenue_pct"]].dropna()
@@ -439,7 +449,7 @@ if not d.empty:
 
 st.divider()
 
-# ───────────────────────── Relationship Explorer (efficiency) ─────────────────────────
+# ─────────────────────── Efficiency Explorer ───────────────────────
 st.subheader("Efficiency Explorer")
 
 num_choices = [
@@ -472,7 +482,7 @@ if not d.empty:
 
 st.divider()
 
-# ───────────────────────── A/B Cohort Comparison ─────────────────────────
+# ─────────────────────── A/B Cohort Comparison ───────────────────────
 st.subheader("A/B Cohort Comparison")
 
 def pick(label, values, key=None):
@@ -529,7 +539,7 @@ st.dataframe(cmp_df, use_container_width=True)
 
 st.divider()
 
-# ───────────────────────── Full Table & Export ─────────────────────────
+# ─────────────────────── Full table & export ───────────────────────
 with st.expander("Show filtered table"):
     st.dataframe(flt, use_container_width=True)
 
