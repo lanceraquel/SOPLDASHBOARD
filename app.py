@@ -1,99 +1,165 @@
-# app.py — SOPL 2024 Dashboard with enhanced UI/UX
-
-import os, io, re, unicodedata
+# app.py — SOPL 2024 Professional Dashboard
+import os
+import io
+import re
+import unicodedata
 import numpy as np
 import pandas as pd
 import altair as alt
 import streamlit as st
 from difflib import SequenceMatcher
 
-# ==================== ENHANCED PAGE CONFIG & STYLING ====================
+# ==================== PAGE CONFIG ====================
 st.set_page_config(
-    page_title="SOPL 2024 – Interactive Dashboard", 
-    page_icon="📊", 
+    page_title="SOPL 2024 Insights Platform",
+    page_icon="🚀",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for professional styling
+# ==================== CUSTOM CSS ====================
 st.markdown("""
 <style>
-    /* Main styling */
+    /* Main styles */
+    .main {
+        background-color: #f8fafc;
+    }
+    
+    /* Header styles */
     .main-header {
-        font-size: 2.5rem !important;
-        font-weight: 700 !important;
-        color: #1F2937 !important;
-        margin-bottom: 0.5rem !important;
-    }
-    .sub-header {
-        font-size: 1.1rem !important;
-        color: #6B7280 !important;
-        margin-bottom: 2rem !important;
-    }
-    .section-header {
-        font-size: 1.4rem !important;
-        font-weight: 600 !important;
-        color: #1F2937 !important;
-        border-bottom: 2px solid #E5E7EB;
-        padding-bottom: 0.5rem;
-        margin: 2rem 0 1rem 0;
-    }
-    
-    /* Metric cards enhancement */
-    .metric-card {
+        font-size: 3rem;
+        font-weight: 800;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        border-radius: 10px;
-        padding: 1rem;
-        color: white;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 0.5rem;
     }
+    
+    .sub-header {
+        font-size: 1.2rem;
+        color: #6B7280;
+        margin-bottom: 2rem;
+        font-weight: 400;
+    }
+    
+    /* Card styles */
+    .metric-card {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        border: 1px solid #e5e7eb;
+        transition: transform 0.2s ease;
+    }
+    
+    .metric-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+    }
+    
     .metric-value {
-        font-size: 1.8rem !important;
-        font-weight: 700 !important;
+        font-size: 2rem;
+        font-weight: 700;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 0.5rem;
     }
     
-    /* Sidebar styling */
-    .sidebar .sidebar-content {
-        background-color: #F8FAFC;
+    .metric-label {
+        font-size: 0.85rem;
+        color: #6B7280;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
     
-    /* KPI columns spacing */
-    .kpi-column {
-        padding: 0.5rem;
+    /* Section headers */
+    .section-header {
+        font-size: 1.6rem;
+        font-weight: 700;
+        color: #1F2937;
+        margin: 2rem 0 1rem 0;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid #667eea;
     }
     
     /* Chart containers */
     .chart-container {
         background: white;
-        border-radius: 10px;
-        padding: 1rem;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.08);
         margin-bottom: 1.5rem;
+        border: 1px solid #e5e7eb;
+    }
+    
+    /* Button styling */
+    .stButton button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 0.5rem 1.5rem;
+        font-weight: 600;
+    }
+    
+    /* Tab styling */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 1rem;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        height: 45px;
+        background-color: #F3F4F6;
+        border-radius: 8px 8px 0 0;
+        padding: 0.5rem 1.5rem;
+        font-weight: 600;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background-color: #667eea !important;
+        color: white !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Enhanced color palette
-HOUSE_COLORS = ["#2663EB", "#24A19C", "#F29F05", "#C4373D", "#7B61FF", "#2A9D8F", "#D97706", "#EF4444", "#10B981", "#8B5CF6"]
-GRADIENT_COLORS = ["#667eea", "#764ba2", "#f093fb", "#f5576c", "#4facfe", "#00f2fe"]
+# ==================== COLOR SCHEME ====================
+HOUSE_COLORS = ["#667eea", "#764ba2", "#f093fb", "#f5576c", "#4facfe", "#00f2fe", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6"]
 
-def house_theme():
+def enhanced_theme():
     return {
         "config": {
-            "range": {"category": HOUSE_COLORS, "heatmap": {"scheme": "blueorange"}},
-            "axis": {"labelColor": "#374151", "titleColor": "#1F2937", "gridColor": "#E5E7EB", "gridWidth": 0.5},
-            "legend": {"labelColor": "#374151", "titleColor": "#1F2937", "labelFontSize": 12, "titleFontSize": 13},
-            "title": {"color": "#1F2937", "fontSize": 16, "anchor": "start", "fontWeight": 600},
+            "view": {"stroke": "transparent"},
             "background": "white",
-            "view": {"stroke": "transparent"}
+            "range": {"category": HOUSE_COLORS},
+            "axis": {
+                "labelColor": "#6B7280",
+                "titleColor": "#1F2937",
+                "titleFontWeight": 600,
+                "gridColor": "#E5E7EB",
+                "gridWidth": 0.5,
+            },
+            "legend": {
+                "labelColor": "#6B7280",
+                "titleColor": "#1F2937",
+                "titleFontWeight": 600
+            },
+            "title": {
+                "color": "#1F2937",
+                "fontSize": 16,
+                "fontWeight": 700,
+                "anchor": "start"
+            }
         }
     }
 
-alt.themes.register("house", house_theme)
-alt.themes.enable("house")
+alt.themes.register("enhanced", enhanced_theme)
+alt.themes.enable("enhanced")
 
+# ==================== DATA PROCESSING FUNCTIONS ====================
 LOCAL_FALLBACK = "data/SOPL 1002 Results - Raw.csv"
 
-# ==================== EXISTING DATA PROCESSING FUNCTIONS (unchanged) ====================
 def normalize(txt: str) -> str:
     if txt is None: return ""
     t = unicodedata.normalize("NFKD", str(txt)).encode("ascii", "ignore").decode("ascii")
@@ -143,13 +209,13 @@ def load_raw(uploaded):
             for sep in seps:
                 try:
                     buf = io.BytesIO(data)
-                    df = pd.read_csv(buf, encoding=enc, sep=sep, engine="python",
-                                     on_bad_lines="skip", encoding_errors="replace")
+                    df = pd.read_csv(buf, encoding=enc, sep=sep, engine="python", on_bad_lines="skip", encoding_errors="replace")
                     if df.shape[1] >= 2:
                         return df
                 except Exception:
                     pass
         st.error("Could not decode upload. Try XLSX or re-save CSV as UTF-8.")
+    
     if os.path.exists(LOCAL_FALLBACK):
         if LOCAL_FALLBACK.lower().endswith((".xlsx",".xls")):
             try: return pd.read_excel(LOCAL_FALLBACK)
@@ -159,8 +225,7 @@ def load_raw(uploaded):
         except Exception:
             for enc in ["utf-8-sig","utf-8","cp1252","latin-1"]:
                 try:
-                    return pd.read_csv(LOCAL_FALLBACK, encoding=enc, sep=None, engine="python",
-                                       on_bad_lines="skip", encoding_errors="replace")
+                    return pd.read_csv(LOCAL_FALLBACK, encoding=enc, sep=None, engine="python", on_bad_lines="skip", encoding_errors="replace")
                 except Exception:
                     pass
             st.error("Local fallback exists but could not be decoded.")
@@ -222,23 +287,6 @@ def mid_from_bins(label: str, mapping: dict) -> float | None:
         val = mapping.get(alt_label.strip())
     return val
 
-def median_iqr(s, fmt="{:.1f}"):
-    x = pd.to_numeric(s, errors="coerce").dropna()
-    if x.empty: return ("—","—","0")
-    med = np.median(x); q1, q3 = np.percentile(x, [25, 75])
-    return (fmt.format(med), f"[{fmt.format(q1)}–{fmt.format(q3)}]", f"{len(x)}")
-
-def render_chart(chart: alt.Chart, name: str, height=None):
-    if height is not None: chart = chart.properties(height=height)
-    with st.container():
-        st.altair_chart(chart, use_container_width=True)
-        try:
-            import vl_convert as vlc
-            png = vlc.vegalite_to_png(chart.to_dict(), scale=2)
-            st.download_button(f"📥 Download {name}.png", png, file_name=f"{name}.png", mime="image/png")
-        except Exception:
-            pass
-
 def resolve_headers(df_raw: pd.DataFrame) -> dict:
     cols = list(df_raw.columns)
     cols_norm = {normalize(c): c for c in cols}
@@ -254,9 +302,12 @@ def standardize(df_raw: pd.DataFrame) -> tuple[pd.DataFrame, dict, list]:
     missing_readable = []
     for k in missing_keys:
         missing_readable.append(SYN[k][0])
+
     if missing_readable:
         st.error("Missing expected columns in CSV:\n- " + "\n- ".join(missing_readable))
+
     def col(k): return mapping.get(k)
+
     d = pd.DataFrame()
     if col("company_name") in df_raw: d["company_name"] = df_raw[col("company_name")]
     if col("region") in df_raw: d["region"] = df_raw[col("region")].map(map_region_short)
@@ -273,296 +324,344 @@ def standardize(df_raw: pd.DataFrame) -> tuple[pd.DataFrame, dict, list]:
     if col("marketplace_revenue_pct") in df_raw:
         d["marketplace_revenue_pct"] = df_raw[col("marketplace_revenue_pct")].apply(to_pct_numeric)
     if col("top_challenge") in df_raw: d["top_challenge"] = df_raw[col("top_challenge")]
+
     if "employee_count_bin" in d: d["employee_count_est"] = d["employee_count_bin"].apply(lambda x: mid_from_bins(x, EMPLOYEES_MAP))
     if "partner_team_size_bin" in d: d["partner_team_size_est"] = d["partner_team_size_bin"].apply(lambda x: mid_from_bins(x, TEAM_SIZE_MAP))
     if "total_partners_bin" in d: d["total_partners_est"] = d["total_partners_bin"].apply(lambda x: mid_from_bins(x, TOTAL_PARTNERS_MAP))
     if "active_partners_bin" in d: d["active_partners_est"] = d["active_partners_bin"].apply(lambda x: mid_from_bins(x, ACTIVE_PARTNERS_MAP))
     if "time_to_first_revenue_bin" in d: d["time_to_first_revenue_years"] = d["time_to_first_revenue_bin"].apply(lambda x: mid_from_bins(x, TTF_REVENUE_MAP))
     if "program_years_bin" in d: d["program_maturity"] = d["program_years_bin"].apply(maturity_from_years)
+
     if {"active_partners_est","total_partners_est"}.issubset(d.columns):
         d["partners_active_ratio"] = d["active_partners_est"] / d["total_partners_est"]
     if {"expected_partner_revenue_pct","partner_team_size_est"}.issubset(d.columns):
         d["expected_partner_revenue_per_partner"] = d["expected_partner_revenue_pct"] / d["partner_team_size_est"]
+
     return d, mapping, missing_readable
 
 # ==================== ENHANCED UI COMPONENTS ====================
-def enhanced_kpi(series, title, fmt="{:.1f}", help_text=None):
-    """Enhanced KPI with better styling"""
-    x = pd.to_numeric(series, errors="coerce") if series is not None else pd.Series(dtype=float)
-    if x.dropna().empty:
-        st.metric(title, "—", "—", help=help_text)
-        return
-    
-    m = np.median(x.dropna())
-    q1, q3 = np.percentile(x.dropna(), [25, 75])
-    n = x.dropna().shape[0]
-    
-    # Determine trend direction for color coding
-    delta_color = "normal"
-    
-    col1, col2, col3 = st.columns([2, 1, 1])
-    with col1:
-        st.metric(
-            title, 
-            fmt.format(m), 
-            f"[{fmt.format(q1)}–{fmt.format(q3)}]",
-            delta_color=delta_color,
-            help=help_text
-        )
-    with col2:
-        st.metric("Sample Size", f"{n:,}")
-    with col3:
-        st.metric("IQR", f"{fmt.format(q3-q1)}")
+def create_metric_card(value, label, change=None, format_str="{:.1f}", help_text=None):
+    """Create a beautiful metric card"""
+    with st.container():
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-value">{format_str.format(value) if value != '—' else '—'}</div>
+            <div class="metric-label">{label}</div>
+            {f'<div style="font-size: 0.8rem; color: #10B981; font-weight: 600; margin-top: 0.5rem;">{change}</div>' if change else ''}
+        </div>
+        """, unsafe_allow_html=True)
+        if help_text:
+            st.caption(help_text)
 
-def create_section_header(title, description=None):
-    """Create a consistent section header with optional description"""
-    st.markdown(f'<div class="section-header">{title}</div>', unsafe_allow_html=True)
+def create_section_header(title, description=None, icon="📊"):
+    """Create a beautiful section header"""
+    st.markdown(f"""
+    <div class="section-header">
+        {icon} {title}
+    </div>
+    """, unsafe_allow_html=True)
     if description:
-        st.caption(description)
+        st.markdown(f'<p style="color: #6B7280; margin-bottom: 1.5rem;">{description}</p>', unsafe_allow_html=True)
 
-# ==================== MAIN APPLICATION ====================
-# Enhanced sidebar
-with st.sidebar:
+def render_chart(chart: alt.Chart, name: str, height=300):
+    """Render chart with download button"""
+    chart = chart.properties(height=height)
+    with st.container():
+        st.altair_chart(chart, use_container_width=True)
+        try:
+            import vl_convert as vlc
+            png = vlc.vegalite_to_png(chart.to_dict(), scale=2)
+            st.download_button(f"📥 Download {name}", png, file_name=f"{name}.png", mime="image/png")
+        except Exception:
+            pass
+
+# ==================== MAIN APP ====================
+def main():
+    # Header Section
+    col_header1, col_header2 = st.columns([3, 1])
+    
+    with col_header1:
+        st.markdown('<div class="main-header">SOPL 2024 Insights Platform</div>', unsafe_allow_html=True)
+        st.markdown('<div class="sub-header">Advanced analytics for partnership program performance and industry benchmarks</div>', unsafe_allow_html=True)
+    
+    with col_header2:
+        st.markdown("")
+        with st.expander("⚙️ Data Source", expanded=False):
+            uploaded = st.file_uploader("Upload SOPL Data", type=["csv","xlsx","xls"], label_visibility="collapsed")
+
+    # Load Data
+    with st.spinner("🚀 Loading and processing data..."):
+        raw = load_raw(uploaded)
+    
+    if raw.empty:
+        st.error("""
+        ## 📊 No Data Loaded
+        
+        Please upload a SOPL data file to begin analysis.
+        Supported formats: CSV, Excel (.xlsx, .xls)
+        """)
+        return
+
+    # Process Data
+    df, mapping, missing = standardize(raw)
+    if df.empty:
+        st.error("Unable to process the uploaded file. Please check the format and try again.")
+        return
+
+    # Quick Stats Bar
+    col_stat1, col_stat2, col_stat3, col_stat4 = st.columns(4)
+    with col_stat1:
+        st.metric("Total Companies", f"{len(df):,}")
+    with col_stat2:
+        st.metric("Industries", f"{df['industry'].nunique() if 'industry' in df.columns else 0}")
+    with col_stat3:
+        st.metric("Regions", f"{df['region'].nunique() if 'region' in df.columns else 0}")
+    with col_stat4:
+        st.metric("Data Quality", f"{(1 - len(missing)/len(SYN)) * 100:.1f}%")
+
     st.markdown("---")
-    st.markdown("### 📊 Data Configuration")
+
+    # Filters in Sidebar
+    with st.sidebar:
+        st.markdown("### 🔍 Filters")
+        
+        # Quick Filters
+        industries = []
+        regions = []
+        maturity_levels = []
+        
+        if 'industry' in df.columns:
+            industries = st.multiselect("Industries", options=sorted(df['industry'].unique()), 
+                                      default=sorted(df['industry'].unique())[:5] if len(df) > 5 else sorted(df['industry'].unique()))
+        
+        if 'region' in df.columns:
+            regions = st.multiselect("Regions", options=sorted(df['region'].unique()), 
+                                   default=sorted(df['region'].unique()))
+        
+        if 'program_maturity' in df.columns:
+            maturity_levels = st.multiselect("Program Maturity", options=sorted(df['program_maturity'].unique()),
+                                           default=sorted(df['program_maturity'].unique()))
+        
+        if 'revenue_band' in df.columns:
+            revenue_bands = st.multiselect("Revenue Bands", options=sorted(df['revenue_band'].unique()),
+                                         default=sorted(df['revenue_band'].unique()))
+
+    # Apply Filters
+    flt = df.copy()
+    if 'industry' in flt and industries:
+        flt = flt[flt['industry'].isin(industries)]
+    if 'region' in flt and regions:
+        flt = flt[flt['region'].isin(regions)]
+    if 'program_maturity' in flt and maturity_levels:
+        flt = flt[flt['program_maturity'].isin(maturity_levels)]
+    if 'revenue_band' in flt and revenue_bands:
+        flt = flt[flt['revenue_band'].isin(revenue_bands)]
+
+    # Main Dashboard Tabs
+    tab1, tab2, tab3, tab4 = st.tabs(["📈 Overview", "🤝 Partnerships", "🚀 Performance", "📊 Explore Data"])
     
-    uploaded = st.file_uploader(
-        "Upload SOPL Data", 
-        type=["csv","xlsx","xls"],
-        help="Upload your SOPL survey data in CSV or Excel format"
-    )
+    with tab1:
+        create_section_header("Key Performance Indicators", "Core metrics across your partnership portfolio")
+        
+        # KPI Grid
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            if "expected_partner_revenue_pct" in flt.columns:
+                median_val = flt["expected_partner_revenue_pct"].median()
+                create_metric_card(median_val, "Expected Partner Revenue", f"{median_val:.1f}%", help_text="Median expected revenue from partnerships")
+        
+        with col2:
+            if "marketplace_revenue_pct" in flt.columns:
+                median_val = flt["marketplace_revenue_pct"].median()
+                create_metric_card(median_val, "Marketplace Revenue", f"{median_val:.1f}%", help_text="Revenue through cloud marketplaces")
+        
+        with col3:
+            if "partner_team_size_est" in flt.columns:
+                median_val = flt["partner_team_size_est"].median()
+                create_metric_card(median_val, "Team Size", f"{median_val:.0f} people", "{:.0f}", help_text="Median partner team size")
+        
+        with col4:
+            if "time_to_first_revenue_years" in flt.columns:
+                median_val = flt["time_to_first_revenue_years"].median()
+                create_metric_card(median_val, "Time to Revenue", f"{median_val:.1f} yrs", help_text="Years to first partnership revenue")
+
+        st.markdown("---")
+        
+        # Charts Row 1
+        create_section_header("Revenue Analysis", "Distribution and trends in partnership revenue")
+        
+        col_chart1, col_chart2 = st.columns(2)
+        
+        with col_chart1:
+            st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+            if {"expected_partner_revenue_pct","program_maturity"}.issubset(flt.columns):
+                d = flt[["program_maturity", "expected_partner_revenue_pct"]].dropna()
+                if not d.empty:
+                    chart = alt.Chart(d).mark_boxplot(size=30).encode(
+                        x=alt.X("program_maturity:N", title="Program Maturity", sort=["Early", "Developing", "Mature"]),
+                        y=alt.Y("expected_partner_revenue_pct:Q", title="Expected Partner Revenue (%)"),
+                        color=alt.Color("program_maturity:N", scale=alt.Scale(range=HOUSE_COLORS), legend=None)
+                    ).properties(title="Revenue Distribution by Program Maturity", height=300)
+                    st.altair_chart(chart, use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        with col_chart2:
+            st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+            if {"region","expected_partner_revenue_pct"}.issubset(flt.columns):
+                d = flt[["region","expected_partner_revenue_pct"]].dropna()
+                if not d.empty:
+                    chart = alt.Chart(d).mark_bar(size=35).encode(
+                        x=alt.X("region:N", title="Region", sort=["NA", "EMEA", "APAC", "LATAM"]),
+                        y=alt.Y("mean(expected_partner_revenue_pct):Q", title="Average Expected Revenue (%)"),
+                        color=alt.Color("region:N", scale=alt.Scale(range=HOUSE_COLORS), legend=None),
+                        tooltip=["region", "mean(expected_partner_revenue_pct)"]
+                    ).properties(title="Average Revenue by Region", height=300)
+                    st.altair_chart(chart, use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
     
-    with st.expander("🔍 Data Quality Check", expanded=False):
-        if uploaded:
-            st.success(f"✅ File loaded: {uploaded.name}")
-        else:
-            st.info("📁 Using fallback data file")
-
-# Load and process data
-with st.spinner("🔄 Loading and processing data..."):
-    raw = load_raw(uploaded)
-
-if raw.empty:
-    st.error("""
-    ## 📊 No Data Loaded
-    
-    Please upload a SOPL data file or ensure the fallback file exists at:
-    **`data/SOPL 1002 Results - Raw.csv`**
-    
-    Supported formats:
-    - CSV files (UTF-8 recommended)
-    - Excel files (.xlsx, .xls)
-    """)
-    st.stop()
-
-df, mapping, missing = standardize(raw)
-if df.empty:
-    st.error("Unable to process the uploaded file. Please check the format and try again.")
-    st.stop()
-
-# Header mapping display
-with st.sidebar.expander("📋 Column Mapping", expanded=False):
-    mdf = pd.DataFrame({
-        "Expected Field": list(mapping.keys()),
-        "Matched Column": [mapping[k] if mapping[k] else "❌ Not found" for k in mapping.keys()]
-    })
-    st.dataframe(mdf, use_container_width=True, height=300)
-    if missing:
-        st.warning(f"Missing {len(missing)} expected columns")
-
-# Enhanced filters
-with st.sidebar:
-    st.markdown("---")
-    st.markdown("### 🔍 Filters")
-    
-    def opts(col):
-        return sorted(df[col].dropna().astype(str).unique().tolist()) if col in df else []
-
-    # Collapsible filter sections
-    with st.expander("🏢 Company Filters", expanded=True):
-        rev_sel = st.multiselect("Revenue Band", options=opts("revenue_band"), default=opts("revenue_band"))
-        ind_sel = st.multiselect("Industry", options=opts("industry"), default=opts("industry"))
-        emp_sel = st.multiselect("Employee Count", options=opts("employee_count_bin"), default=opts("employee_count_bin"))
-    
-    with st.expander("🌍 Regional Filters", expanded=True):
-        reg_order = ["APAC","EMEA","LATAM","NA"]
-        reg_all = opts("region")
-        reg_sorted = [r for r in reg_order if r in reg_all] + [r for r in reg_all if r not in reg_order]
-        reg_sel = st.multiselect("Region", options=reg_sorted, default=reg_sorted)
-    
-    with st.expander("📈 Program Filters", expanded=True):
-        mat_order = ["Early","Developing","Mature","Unknown"]
-        mat_all = opts("program_maturity")
-        mat_sorted = [m for m in mat_order if m in mat_all]
-        mat_sel = st.multiselect("Program Maturity", options=mat_sorted, default=mat_sorted)
-        team_sel = st.multiselect("Partner Team Size", options=opts("partner_team_size_bin"), default=opts("partner_team_size_bin"))
-
-# Apply filters
-flt = df.copy()
-if "revenue_band" in flt and rev_sel: flt = flt[flt["revenue_band"].isin(rev_sel)]
-if "industry" in flt and ind_sel: flt = flt[flt["industry"].isin(ind_sel)]
-if "region" in flt and reg_sel: flt = flt[flt["region"].isin(reg_sel)]
-if "program_maturity" in flt and mat_sel: flt = flt[flt["program_maturity"].isin(mat_sel)]
-if "employee_count_bin" in flt and emp_sel: flt = flt[flt["employee_count_bin"].isin(emp_sel)]
-if "partner_team_size_bin" in flt and team_sel: flt = flt[flt["partner_team_size_bin"].isin(team_sel)]
-
-# ==================== ENHANCED DASHBOARD LAYOUT ====================
-# Main header
-st.markdown('<div class="main-header">SOPL 2024 – Interactive Dashboard</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">Explore partnership program benchmarks and industry insights</div>', unsafe_allow_html=True)
-
-# Response metrics
-col_resp1, col_resp2, col_resp3 = st.columns(3)
-with col_resp1:
-    st.metric("📊 Responses (Filtered)", f"{len(flt):,}")
-with col_resp2:
-    st.metric("📈 Total Responses", f"{len(df):,}")
-with col_resp3:
-    filter_percentage = (len(flt) / len(df)) * 100 if len(df) > 0 else 0
-    st.metric("🎯 Filter Coverage", f"{filter_percentage:.1f}%")
-
-st.markdown("---")
-
-# Key Performance Indicators
-create_section_header("📊 Key Performance Indicators", "Median values with interquartile ranges")
-
-# First row of KPIs
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    enhanced_kpi(flt.get("expected_partner_revenue_pct"), "Expected Partner Revenue (%)", help_text="Median expected revenue from partnerships")
-with col2:
-    enhanced_kpi(flt.get("marketplace_revenue_pct"), "Marketplace Revenue (%)", help_text="Median revenue through cloud marketplaces")
-with col3:
-    enhanced_kpi(flt.get("partner_team_size_est"), "Partner Team Size", "{:.0f}", help_text="Estimated partner team size")
-with col4:
-    enhanced_kpi(flt.get("time_to_first_revenue_years"), "Time to First Revenue", "{:.1f} yrs", help_text="Years to first partnership revenue")
-
-# Second row of KPIs
-col5, col6, col7, col8 = st.columns(4)
-with col5:
-    enhanced_kpi(flt.get("total_partners_est"), "Total Partners", "{:.0f}", help_text="Estimated total partners")
-with col6:
-    enhanced_kpi(flt.get("active_partners_est"), "Active Partners", "{:.0f}", help_text="Estimated active revenue-generating partners")
-with col7:
-    enhanced_kpi(flt.get("partners_active_ratio"), "Activation Ratio", "{:.2f}", help_text="Ratio of active to total partners")
-with col8:
-    if {"partner_team_size_est","employee_count_est"}.issubset(flt.columns):
-        tpe = (flt["partner_team_size_est"] / (flt["employee_count_est"] / 1000)).replace([np.inf,-np.inf], np.nan)
-        enhanced_kpi(tpe, "Team per 1k Employees", "{:.2f}", help_text="Partner team size per 1,000 employees")
-    else:
-        st.metric("Team per 1k Employees", "—", "—")
-
-st.markdown("---")
-
-# ==================== ENHANCED VISUALIZATIONS ====================
-# Expected Partner Revenue Section
-create_section_header("📈 Expected Partner Revenue Analysis", "Distribution across different cohorts")
-
-if {"expected_partner_revenue_pct","program_maturity"}.issubset(flt.columns):
-    col_chart1, col_chart2 = st.columns(2)
-    
-    with col_chart1:
-        # Distribution by Program Maturity
-        d = flt[["program_maturity", "expected_partner_revenue_pct"]].dropna()
-        if not d.empty:
-            base = alt.Chart(d).transform_density(
-                "expected_partner_revenue_pct", groupby=["program_maturity"], as_=["value","density"]
-            )
-            chart = base.mark_area(opacity=0.7).encode(
-                x=alt.X("value:Q", title="Expected Partner Revenue (%)"),
-                y=alt.Y("density:Q", title="Density"),
-                color=alt.Color("program_maturity:N", title="Program Maturity", scale=alt.Scale(range=HOUSE_COLORS)),
-                tooltip=["program_maturity", alt.Tooltip("value:Q", format=".1f"), alt.Tooltip("density:Q", format=".3f")]
-            ).properties(title="Distribution by Program Maturity", height=300)
-            st.altair_chart(chart, use_container_width=True)
-    
-    with col_chart2:
-        # Box plot by Region
-        if {"region","expected_partner_revenue_pct"}.issubset(flt.columns):
-            d = flt[["region","expected_partner_revenue_pct"]].dropna()
-            if not d.empty:
-                chart = alt.Chart(d).mark_boxplot(size=30).encode(
-                    x=alt.X("region:N", title="Region", sort=["NA", "EMEA", "APAC", "LATAM"]),
-                    y=alt.Y("expected_partner_revenue_pct:Q", title="Expected Partner Revenue (%)"),
-                    color=alt.Color("region:N", legend=None, scale=alt.Scale(range=HOUSE_COLORS))
-                ).properties(title="Expected Partner Revenue by Region", height=300)
+    with tab2:
+        create_section_header("Partnership Analytics", "Deep dive into partner relationships and performance")
+        
+        col_part1, col_part2 = st.columns(2)
+        
+        with col_part1:
+            st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+            if {"total_partners_est", "active_partners_est"}.issubset(flt.columns):
+                summary_data = pd.DataFrame({
+                    'Type': ['Total Partners', 'Active Partners'],
+                    'Count': [flt['total_partners_est'].median(), flt['active_partners_est'].median()]
+                })
+                
+                chart = alt.Chart(summary_data).mark_bar(size=50).encode(
+                    x=alt.X('Type:N', title=''),
+                    y=alt.Y('Count:Q', title='Median Count'),
+                    color=alt.Color('Type:N', scale=alt.Scale(range=HOUSE_COLORS[:2]), legend=None)
+                ).properties(title="Partner Portfolio Size", height=300)
                 st.altair_chart(chart, use_container_width=True)
-
-# Partner Counts & Activation Section
-create_section_header("🤝 Partner Program Performance", "Activation ratios and partner metrics")
-
-col_act1, col_act2 = st.columns(2)
-
-with col_act1:
-    if {"revenue_band","partners_active_ratio"}.issubset(flt.columns):
-        d = flt[["revenue_band","partners_active_ratio"]].dropna()
-        if not d.empty:
-            agg = d.groupby("revenue_band")["partners_active_ratio"].median().reset_index()
-            bars = alt.Chart(agg).mark_bar(size=30).encode(
-                x=alt.X("revenue_band:N", title="Revenue Band", sort=list(agg["revenue_band"])),
-                y=alt.Y("partners_active_ratio:Q", title="Median Activation Ratio"),
-                color=alt.Color("revenue_band:N", legend=None, scale=alt.Scale(range=HOUSE_COLORS)),
-                tooltip=["revenue_band", alt.Tooltip("partners_active_ratio:Q", format=".2f")]
-            ).properties(title="Activation Ratio by Revenue Band", height=300)
-            st.altair_chart(bars, use_container_width=True)
-
-with col_act2:
-    if {"industry","partners_active_ratio"}.issubset(flt.columns):
-        d2 = flt[["industry","partners_active_ratio"]].dropna()
-        if not d2.empty:
-            topN = d2["industry"].value_counts().head(10).index.tolist()
-            d2 = d2[d2["industry"].isin(topN)]
-            agg2 = d2.groupby("industry")["partners_active_ratio"].median().sort_values(ascending=False).reset_index()
-            bars2 = alt.Chart(agg2).mark_bar(size=25).encode(
-                x=alt.X("partners_active_ratio:Q", title="Median Activation Ratio"),
-                y=alt.Y("industry:N", sort="-x", title="Industry"),
-                color=alt.Color("industry:N", legend=None, scale=alt.Scale(range=HOUSE_COLORS)),
-                tooltip=["industry", alt.Tooltip("partners_active_ratio:Q", format=".2f")]
-            ).properties(title="Activation Ratio by Industry (Top 10)", height=350)
-            st.altair_chart(bars2, use_container_width=True)
-
-# Continue with the rest of your visualizations following the same enhanced pattern...
-# [The remaining chart code would follow the same enhancement pattern...]
-
-# ==================== DATA EXPLORATION & DOWNLOADS ====================
-create_section_header("🔍 Data Exploration", "Explore and download filtered data")
-
-tab1, tab2, tab3 = st.tabs(["📋 Filtered Data", "📊 A/B Comparison", "💾 Export"])
-
-with tab1:
-    st.dataframe(flt, use_container_width=True, height=400)
-
-with tab2:
-    # A/B Comparison code here...
-    st.info("A/B cohort comparison feature")
-
-with tab3:
-    st.download_button(
-        "📥 Download Filtered CSV", 
-        flt.to_csv(index=False).encode("utf-8"),
-        file_name="sopl_2024_filtered_data.csv", 
-        mime="text/csv",
-        help="Download the currently filtered dataset as CSV"
-    )
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        with col_part2:
+            st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+            if {"top_challenge","program_maturity"}.issubset(flt.columns):
+                d = flt[["top_challenge","program_maturity"]].dropna()
+                if not d.empty:
+                    counts = d.groupby(["program_maturity","top_challenge"]).size().reset_index(name='count')
+                    top_challenges = counts.groupby('top_challenge')['count'].sum().nlargest(8).index
+                    counts = counts[counts['top_challenge'].isin(top_challenges)]
+                    
+                    chart = alt.Chart(counts).mark_bar().encode(
+                        x=alt.X('sum(count):Q', title='Number of Responses'),
+                        y=alt.Y('top_challenge:N', title='Challenge', sort='-x'),
+                        color=alt.Color('program_maturity:N', scale=alt.Scale(range=HOUSE_COLORS), title='Maturity'),
+                        tooltip=['top_challenge', 'program_maturity', 'count']
+                    ).properties(title="Top Challenges by Program Maturity", height=400)
+                    st.altair_chart(chart, use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
     
-    # Summary statistics
-    st.subheader("Dataset Summary")
-    st.json({
-        "total_records": len(flt),
-        "columns_available": list(flt.columns),
-        "filters_applied": {
-            "revenue_bands": rev_sel,
-            "industries": ind_sel,
-            "regions": reg_sel,
-            "maturity_levels": mat_sel
-        }
-    })
+    with tab3:
+        create_section_header("Performance Benchmarks", "Compare your performance against industry standards")
+        
+        # Performance Metrics
+        col_perf1, col_perf2, col_perf3, col_perf4 = st.columns(4)
+        
+        with col_perf1:
+            if "partners_active_ratio" in flt.columns:
+                activation_median = flt["partners_active_ratio"].median()
+                create_metric_card(activation_median, "Activation Rate", f"{activation_median:.1%}", "{:.2f}")
+        
+        with col_perf2:
+            if "expected_partner_revenue_per_partner" in flt.columns:
+                revenue_per_partner = flt["expected_partner_revenue_per_partner"].median()
+                create_metric_card(revenue_per_partner, "Revenue per Partner", f"${revenue_per_partner:.0f}", "{:.0f}")
+        
+        with col_perf3:
+            if {"partner_team_size_est", "employee_count_est"}.issubset(flt.columns):
+                team_per_1k = (flt["partner_team_size_est"] / (flt["employee_count_est"] / 1000)).median()
+                create_metric_card(team_per_1k, "Team per 1K Employees", f"{team_per_1k:.1f}", "{:.1f}")
+        
+        with col_perf4:
+            if "total_partners_est" in flt.columns and "active_partners_est" in flt.columns:
+                total_active_ratio = flt["active_partners_est"].sum() / flt["total_partners_est"].sum()
+                create_metric_card(total_active_ratio, "Overall Activation", f"{total_active_ratio:.1%}", "{:.2f}")
 
-# Footer
-st.markdown("---")
-st.markdown(
-    "<div style='text-align: center; color: #6B7280; font-size: 0.9rem;'>"
-    "SOPL 2024 Interactive Dashboard • Built with Streamlit"
-    "</div>", 
-    unsafe_allow_html=True
-)
+        st.markdown("---")
+        
+        # Performance Charts
+        col_perf_chart1, col_perf_chart2 = st.columns(2)
+        
+        with col_perf_chart1:
+            st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+            if {"industry","partners_active_ratio"}.issubset(flt.columns):
+                d2 = flt[["industry","partners_active_ratio"]].dropna()
+                if not d2.empty:
+                    topN = d2["industry"].value_counts().head(10).index.tolist()
+                    d2 = d2[d2["industry"].isin(topN)]
+                    agg2 = d2.groupby("industry")["partners_active_ratio"].median().sort_values(ascending=False).reset_index()
+                    bars2 = alt.Chart(agg2).mark_bar(size=25).encode(
+                        x=alt.X("partners_active_ratio:Q", title="Median Activation Ratio"),
+                        y=alt.Y("industry:N", sort="-x", title="Industry"),
+                        color=alt.Color("industry:N", legend=None, scale=alt.Scale(range=HOUSE_COLORS)),
+                        tooltip=["industry", alt.Tooltip("partners_active_ratio:Q", format=".2f")]
+                    ).properties(title="Activation Ratio by Industry (Top 10)", height=400)
+                    st.altair_chart(bars2, use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        with col_perf_chart2:
+            st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+            if {"program_maturity","industry","time_to_first_revenue_years"}.issubset(flt.columns):
+                d = flt[["program_maturity","industry","time_to_first_revenue_years"]].dropna()
+                if not d.empty:
+                    top_ind = d["industry"].value_counts().head(8).index.tolist()
+                    d = d[d["industry"].isin(top_ind)]
+                    chart = alt.Chart(d).mark_rect().encode(
+                        x=alt.X("program_maturity:N", title="Program Maturity"),
+                        y=alt.Y("industry:N", title="Industry"),
+                        color=alt.Color("mean(time_to_first_revenue_years):Q", title="Mean Years"),
+                        tooltip=["industry","program_maturity", alt.Tooltip("mean(time_to_first_revenue_years):Q", format=".2f")]
+                    ).properties(title="Time to Revenue by Maturity × Industry", height=400)
+                    st.altair_chart(chart, use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+    
+    with tab4:
+        create_section_header("Data Explorer", "Interactive data exploration and export")
+        
+        # Data Table with Filters
+        col_filter1, col_filter2, col_filter3 = st.columns(3)
+        
+        with col_filter1:
+            show_columns = st.multiselect("Select Columns", 
+                                        options=flt.columns.tolist(), 
+                                        default=flt.columns.tolist()[:6])
+        
+        with col_filter2:
+            rows_to_show = st.slider("Rows to display", 10, 100, 20)
+        
+        with col_filter3:
+            st.markdown("")
+            st.markdown("")
+            csv = flt[show_columns].to_csv(index=False)
+            st.download_button(
+                "📥 Export Filtered Data",
+                csv,
+                "sopl_2024_data.csv",
+                "text/csv",
+                use_container_width=True
+            )
+        
+        # Data Table
+        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+        st.dataframe(flt[show_columns].head(rows_to_show), use_container_width=True, height=400)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Footer
+    st.markdown("---")
+    st.markdown(
+        "<div style='text-align: center; color: #6B7280; font-size: 0.9rem; padding: 2rem;'>"
+        "SOPL 2024 Insights Platform • Built with Streamlit • Professional Analytics Dashboard"
+        "</div>", 
+        unsafe_allow_html=True
+    )
+
+if __name__ == "__main__":
+    main()
