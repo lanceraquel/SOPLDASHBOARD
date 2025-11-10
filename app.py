@@ -11,7 +11,7 @@ from difflib import SequenceMatcher
 
 # ==================== PAGE CONFIG ====================
 st.set_page_config(
-    page_title="SOPL 2024 Insights Platform",
+    page_title="SOPL 2025 Insights Platform",
     page_icon="🚀",
     layout="wide",
     initial_sidebar_state="expanded"
