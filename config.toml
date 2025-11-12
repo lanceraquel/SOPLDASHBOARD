@@ -1,4 +1,5 @@
 [server]
+runOnSave = false
 headless = true
 enableXsrfProtection = true
-enableCORS = false
+enableCORS = true
