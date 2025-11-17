@@ -25,17 +25,18 @@ st.set_page_config(
 st.markdown("""
 <style>
     :root {
-        --bg: #f9fafb;
+        --bg: #ffffff;
         --panel: #ffffff;
         --card: #ffffff;
         --muted: #64748b;
         --text: #020617;
-        --accent: #3b308f;  /* Atlas blue */
+        --accent: #3b308f;
         --success: #16a34a;
         --warning: #f59e0b;
         --danger: #ef4444;
         --glass: rgba(15,23,42,0.04);
     }
+
 
     .theme-light {
         --bg: #f9fafb;
@@ -1029,16 +1030,6 @@ def main():
 """
         # Big embed on main page, but constrained to fit nicely
         components.html(pickaxe_html, height=650, scrolling=True)
-
-        with st.expander("Embed diagnostics / troubleshooting", expanded=False):
-            st.write("If the assistant UI doesn't appear above, try:")
-            st.markdown("- Confirm the 'Show Assistant Bot (Pickaxe)' checkbox in the sidebar is checked.")
-            st.markdown("- Check browser console for blocked scripts or network errors.")
-            st.markdown("- Some networks may block external script hosts. If so, open Pickaxe Studio in a new tab.")
-            st.markdown("---")
-            st.markdown("**Debug info**")
-            st.write(f"session_state.show_bot = {st.session_state.get('show_bot')}")
-            st.write(f"Embed HTML length: {len(pickaxe_html)} characters")
 
     # Footer
     st.markdown("---")
