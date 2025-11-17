@@ -69,7 +69,7 @@ html, body, .stApp, .stApp * {
     margin-bottom: 16px;
 }
 .main-header {
-    font-size: 2.6rem;               /* Bigger, executive look */
+    font-size: 3.5rem;               /* Bigger, executive look */
     font-weight: 900;
     margin: 0;
     color: #ec3d72 !important;       /* Amaranth */
