@@ -3,6 +3,7 @@ from pathlib import Path
 
 import altair as alt
 import pandas as pd
+import pydeck as pdk
 import streamlit as st
 import streamlit.components.v1 as components
 
@@ -18,14 +19,13 @@ st.set_page_config(
 APP_DIR = Path(__file__).parent
 DEFAULT_CSV_PATH = APP_DIR / "data" / "SOPL 1002 Results - Raw.csv"
 
-# ==================== LIGHT THEME CSS ====================
+# ==================== LIGHT THEME + CSS ====================
 st.markdown(
     """
 <style>
 /* Force light background everywhere */
 html, body, .stApp {
     background-color: #ffffff !important;
-    color: #020617 !important;
 }
 
 /* Main view container */
@@ -43,7 +43,7 @@ main.block-container {
     background-color: #f9fafb !important;
 }
 
-/* Common typography + Atlas blue accent */
+/* Base tokens */
 :root {
     --bg: #ffffff;
     --panel: #ffffff;
@@ -57,10 +57,16 @@ main.block-container {
     --glass: rgba(15,23,42,0.04);
 }
 
+/* Make sure ALL text is dark and readable on white */
+.app-wrapper,
+.app-wrapper * {
+    color: #020617 !important;
+}
+
+/* Layout + typography */
 .app-wrapper {
     background: var(--bg);
-    color: var(--text);
-    padding: 18px 24px 32px 24px;
+    padding: 18px 24px 40px 24px;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
@@ -69,42 +75,40 @@ main.block-container {
     align-items:flex-start;
     justify-content:space-between;
     gap:12px;
-    margin-bottom: 12px;
+    margin-bottom: 16px;
 }
 .main-header {
     font-size: 1.9rem;
     font-weight: 800;
     margin: 0;
-    color: var(--text);
 }
 .sub-header {
     font-size: 0.95rem;
-    color: var(--muted);
+    color: var(--muted) !important;
     margin-top: 4px;
 }
 
 .section-header {
     font-size: 1.1rem;
     font-weight: 700;
-    color: var(--text);
-    margin-top: 18px;
+    margin-top: 20px;
     margin-bottom: 8px;
 }
 
 .chart-caption {
     font-size: 0.8rem;
-    color: var(--muted);
+    color: var(--muted) !important;
     margin-top: 4px;
 }
 
 .card {
     background: var(--panel);
     border-radius: 10px;
-    padding: 12px;
-    border: 1px solid rgba(148,163,184,0.3);
+    padding: 12px 14px;
+    border: 1px solid rgba(148,163,184,0.4);
 }
 
-/* Streamlit widgets tweaks */
+/* Widget polish */
 .stSelectbox > div > div,
 .stMultiSelect > div > div {
     border-radius: 8px;
@@ -125,7 +129,9 @@ def atlas_light_theme():
         "config": {
             "view": {"stroke": "transparent"},
             "background": "#ffffff",
-            "range": {"category": ["#3b308f", "#64748b", "#93c5fd", "#1d4ed8", "#0f766e"]},
+            "range": {
+                "category": ["#3b308f", "#64748b", "#93c5fd", "#1d4ed8", "#0f766e"]
+            },
             "axis": {
                 "labelColor": "#475569",
                 "titleColor": "#020617",
@@ -160,10 +166,7 @@ def load_data(uploaded_file, encoding_choice: str = "auto") -> pd.DataFrame:
     encodings = ["cp1252", "utf-8-sig", "utf-8", "latin-1"]
 
     def _read_any(path_or_buf):
-        if isinstance(path_or_buf, (str, Path)):
-            buf = str(path_or_buf)
-        else:
-            buf = path_or_buf
+        buf = path_or_buf
         tried = []
         for enc in (encodings if encoding_choice == "auto" else [encoding_choice]):
             try:
@@ -173,14 +176,14 @@ def load_data(uploaded_file, encoding_choice: str = "auto") -> pd.DataFrame:
                 continue
         raise RuntimeError("All decode attempts failed:\n" + "\n".join(tried))
 
-    # 1) Uploaded file wins
+    # 1) Uploaded
     if uploaded_file is not None:
         name = (uploaded_file.name or "").lower()
         if name.endswith((".xlsx", ".xls")):
             try:
                 return pd.read_excel(uploaded_file)
             except Exception:
-                pass  # fall back to CSV reader below
+                pass
         try:
             return _read_any(uploaded_file)
         except Exception as e:
@@ -190,12 +193,16 @@ def load_data(uploaded_file, encoding_choice: str = "auto") -> pd.DataFrame:
     # 2) Fallback to repo CSV
     if DEFAULT_CSV_PATH.exists():
         try:
-            return _read_any(DEFAULT_CSV_PATH)
+            return _read_any(str(DEFAULT_CSV_PATH))
         except Exception as e:
-            st.error(f"Bundled SOPL CSV found at {DEFAULT_CSV_PATH} but could not be read: {e}")
+            st.error(
+                f"Bundled SOPL CSV found at {DEFAULT_CSV_PATH} but could not be read: {e}"
+            )
             return pd.DataFrame()
 
-    st.error("No data available. Upload a SOPL CSV/XLSX, or ensure the default CSV is packaged at /data/SOPL 1002 Results - Raw.csv.")
+    st.error(
+        "No data available. Upload a SOPL CSV/XLSX, or ensure the default CSV is packaged at /data/SOPL 1002 Results - Raw.csv."
+    )
     return pd.DataFrame()
 
 
@@ -215,9 +222,6 @@ def multi_select_pct(df: pd.DataFrame, col_prefix: str = None, contains_substrin
     """
     For Qualtrics-style multi-select (one column per option with 1/0/NaN),
     compute share of respondents selecting each option.
-    Either:
-      - all columns starting with col_prefix, or
-      - all columns containing contains_substring.
     """
     if col_prefix:
         cols = [c for c in df.columns if c.startswith(col_prefix)]
@@ -235,7 +239,6 @@ def multi_select_pct(df: pd.DataFrame, col_prefix: str = None, contains_substrin
         col = df[c]
         selected = ((col == 1) | (col == 1.0) | (col == True)).sum()
         pct = (selected / n * 100.0) if n > 0 else 0.0
-        # derive option label from text after underscore if present
         label = c.split("_", 1)[1] if "_" in c else c
         rows.append({"option": label, "pct": pct})
 
@@ -254,7 +257,6 @@ def bar_chart_from_pct(df_pct: pd.DataFrame, cat_field: str, pct_field: str, tit
         return
 
     data = df_pct.copy()
-    # format category as string for safety
     data[cat_field] = data[cat_field].astype(str)
 
     if horizontal:
@@ -262,7 +264,11 @@ def bar_chart_from_pct(df_pct: pd.DataFrame, cat_field: str, pct_field: str, tit
             alt.Chart(data)
             .mark_bar()
             .encode(
-                x=alt.X(f"{pct_field}:Q", title="Share of respondents (%)", axis=alt.Axis(format=".0f")),
+                x=alt.X(
+                    f"{pct_field}:Q",
+                    title="Share of respondents (%)",
+                    axis=alt.Axis(format=".0f"),
+                ),
                 y=alt.Y(f"{cat_field}:N", sort="-x", title=None),
                 color=alt.value("#3b308f"),
                 tooltip=[
@@ -270,7 +276,8 @@ def bar_chart_from_pct(df_pct: pd.DataFrame, cat_field: str, pct_field: str, tit
                     alt.Tooltip(f"{pct_field}:Q", title="Share (%)", format=".1f"),
                 ],
             )
-            .properties(height=max(180, 24 * len(data)), title=title)
+            .properties(height=max(220, 26 * len(data)), title=title)
+            .interactive()
         )
     else:
         chart = (
@@ -278,14 +285,19 @@ def bar_chart_from_pct(df_pct: pd.DataFrame, cat_field: str, pct_field: str, tit
             .mark_bar()
             .encode(
                 x=alt.X(f"{cat_field}:N", sort="-y", title=None),
-                y=alt.Y(f"{pct_field}:Q", title="Share of respondents (%)", axis=alt.Axis(format=".0f")),
+                y=alt.Y(
+                    f"{pct_field}:Q",
+                    title="Share of respondents (%)",
+                    axis=alt.Axis(format=".0f"),
+                ),
                 color=alt.value("#3b308f"),
                 tooltip=[
                     alt.Tooltip(f"{cat_field}:N", title="Category"),
                     alt.Tooltip(f"{pct_field}:Q", title="Share (%)", format=".1f"),
                 ],
             )
-            .properties(height=320, title=title)
+            .properties(height=360, title=title)
+            .interactive()
         )
 
     st.altair_chart(chart, use_container_width=True)
@@ -301,7 +313,7 @@ def donut_chart_from_pct(df_pct: pd.DataFrame, cat_field: str, pct_field: str, t
 
     chart = (
         alt.Chart(data)
-        .mark_arc(innerRadius=60)
+        .mark_arc(innerRadius=70)
         .encode(
             theta=alt.Theta(f"{pct_field}:Q", stack=True),
             color=alt.Color(f"{cat_field}:N", legend=alt.Legend(title=None)),
@@ -310,10 +322,11 @@ def donut_chart_from_pct(df_pct: pd.DataFrame, cat_field: str, pct_field: str, t
                 alt.Tooltip(f"{pct_field}:Q", title="Share (%)", format=".1f"),
             ],
         )
-        .properties(width=320, height=320, title=title)
+        .properties(width=360, height=360, title=title)
+        .interactive()
     )
 
-    st.altair_chart(chart, use_container_width=False)
+    st.altair_chart(chart, use_container_width=True)
 
 
 def win_rate_distribution_pct(df: pd.DataFrame, col: str):
@@ -329,7 +342,13 @@ def win_rate_distribution_pct(df: pd.DataFrame, col: str):
     pct_df = value_counts_pct(binned)
     pct_df = pct_df.rename(columns={"category": "bin", "pct": "pct"})
 
-    bar_chart_from_pct(pct_df, "bin", "pct", "Win rate distribution (by 10-point bands)", horizontal=False)
+    bar_chart_from_pct(
+        pct_df,
+        "bin",
+        "pct",
+        "Win rate distribution (10-point bands)",
+        horizontal=False,
+    )
     st.markdown(
         '<div class="chart-caption">Percentages are based on respondents who answered the win-rate question.</div>',
         unsafe_allow_html=True,
@@ -392,7 +411,7 @@ def main():
     if COL_REGION in df.columns:
         region_options = sorted(df[COL_REGION].dropna().unique().tolist())
         selected_regions = st.sidebar.multiselect(
-            "Region",
+            "Region (HQ)",
             options=region_options,
             default=region_options,
         )
@@ -402,7 +421,6 @@ def main():
     # Revenue filter
     if COL_REVENUE in df.columns:
         revenue_options = df[COL_REVENUE].dropna().unique().tolist()
-        # keep original survey order if possible
         revenue_order = [
             "Less than $50 million",
             "$50M – $250M",
@@ -410,7 +428,6 @@ def main():
             "$1B – $10B",
             "More than $10B",
         ]
-        # fallback if unseen labels
         ordered_revenue = [r for r in revenue_order if r in revenue_options] + [
             r for r in revenue_options if r not in revenue_order
         ]
@@ -444,11 +461,11 @@ def main():
 
     # Apply filters
     flt = df.copy()
-    if selected_regions is not None and selected_regions:
+    if selected_regions:
         flt = flt[flt[COL_REGION].isin(selected_regions)]
-    if selected_revenue is not None and selected_revenue:
+    if selected_revenue:
         flt = flt[flt[COL_REVENUE].isin(selected_revenue)]
-    if selected_employees is not None and selected_employees:
+    if selected_employees:
         flt = flt[flt[COL_EMPLOYEES].isin(selected_employees)]
 
     st.caption(f"Responses in current view: {len(flt)}")
@@ -460,23 +477,25 @@ def main():
 
     # ===== Overview tab =====
     with tab_overview:
-        create_section_header("Company profile (percentages)")
+        create_section_header("Company profile (percentage breakdown)")
 
-        col1, col2, col3 = st.columns(3)
+        # Bigger charts: 2 columns instead of 3
+        c1, c2 = st.columns(2)
 
-        with col1:
+        with c1:
             if COL_REGION in flt.columns:
                 region_pct = value_counts_pct(flt[COL_REGION])
-                donut_chart_from_pct(region_pct, "category", "pct", "Region (HQ) share")
+                donut_chart_from_pct(
+                    region_pct, "category", "pct", "Region (HQ) share of respondents"
+                )
                 st.markdown(
                     '<div class="chart-caption">Percentages are based on respondents who selected a region.</div>',
                     unsafe_allow_html=True,
                 )
 
-        with col2:
+        with c2:
             if COL_REVENUE in flt.columns:
                 rev_pct = value_counts_pct(flt[COL_REVENUE])
-                # keep revenue order for display
                 order = [
                     "Less than $50 million",
                     "$50M – $250M",
@@ -484,15 +503,25 @@ def main():
                     "$1B – $10B",
                     "More than $10B",
                 ]
-                rev_pct["category"] = pd.Categorical(rev_pct["category"], categories=order, ordered=True)
+                rev_pct["category"] = pd.Categorical(
+                    rev_pct["category"], categories=order, ordered=True
+                )
                 rev_pct = rev_pct.sort_values("category")
-                bar_chart_from_pct(rev_pct, "category", "pct", "Annual revenue band", horizontal=True)
+                bar_chart_from_pct(
+                    rev_pct,
+                    "category",
+                    "pct",
+                    "Annual revenue band (share of respondents)",
+                    horizontal=True,
+                )
                 st.markdown(
                     '<div class="chart-caption">Percentages are based on respondents who answered the revenue question.</div>',
                     unsafe_allow_html=True,
                 )
 
-        with col3:
+        c3, c4 = st.columns(2)
+
+        with c3:
             if COL_EMPLOYEES in flt.columns:
                 emp_pct = value_counts_pct(flt[COL_EMPLOYEES])
                 emp_order = [
@@ -501,46 +530,66 @@ def main():
                     "501 – 5,000 employees",
                     "More than 5,000 employees",
                 ]
-                emp_pct["category"] = pd.Categorical(emp_pct["category"], categories=emp_order, ordered=True)
+                emp_pct["category"] = pd.Categorical(
+                    emp_pct["category"], categories=emp_order, ordered=True
+                )
                 emp_pct = emp_pct.sort_values("category")
-                bar_chart_from_pct(emp_pct, "category", "pct", "Company size (employees)", horizontal=True)
+                bar_chart_from_pct(
+                    emp_pct,
+                    "category",
+                    "pct",
+                    "Company size (employees)",
+                    horizontal=True,
+                )
                 st.markdown(
                     '<div class="chart-caption">Percentages are based on respondents who answered the employee-count question.</div>',
                     unsafe_allow_html=True,
                 )
 
-        create_section_header("Industry distribution")
-        if COL_INDUSTRY in flt.columns:
-            ind_pct = value_counts_pct(flt[COL_INDUSTRY])
-            bar_chart_from_pct(ind_pct, "category", "pct", "Industry sector (share of respondents)", horizontal=True)
-            st.markdown(
-                '<div class="chart-caption">Each bar shows the share of respondents in that industry.</div>',
-                unsafe_allow_html=True,
-            )
+        with c4:
+            if COL_INDUSTRY in flt.columns:
+                ind_pct = value_counts_pct(flt[COL_INDUSTRY])
+                bar_chart_from_pct(
+                    ind_pct,
+                    "category",
+                    "pct",
+                    "Industry sector (share of respondents)",
+                    horizontal=True,
+                )
+                st.markdown(
+                    '<div class="chart-caption">Each bar shows the percentage of respondents in that industry.</div>',
+                    unsafe_allow_html=True,
+                )
 
     # ===== Performance tab =====
     with tab_performance:
         create_section_header("Deal performance vs direct motion")
 
-        col1, col2 = st.columns(2)
+        p1, p2 = st.columns(2)
 
-        with col1:
+        with p1:
             if COL_DEAL_SIZE in flt.columns:
                 ds_pct = value_counts_pct(flt[COL_DEAL_SIZE])
-                bar_chart_from_pct(ds_pct, "category", "pct", "Average deal size: partner vs direct", horizontal=True)
+                bar_chart_from_pct(
+                    ds_pct,
+                    "category",
+                    "pct",
+                    "Average deal size: partner vs direct",
+                    horizontal=True,
+                )
                 st.markdown(
                     '<div class="chart-caption">Percentages are based on respondents who answered the deal-size comparison.</div>',
                     unsafe_allow_html=True,
                 )
 
-        with col2:
+        with p2:
             if COL_CAC in flt.columns:
                 cac_pct = value_counts_pct(flt[COL_CAC])
                 bar_chart_from_pct(
                     cac_pct,
                     "category",
                     "pct",
-                    "Partner-referred CAC vs direct",
+                    "Partner-sourced CAC vs direct",
                     horizontal=True,
                 )
                 st.markdown(
@@ -550,9 +599,9 @@ def main():
 
         create_section_header("Sales cycle & win rate")
 
-        col3, col4 = st.columns(2)
+        p3, p4 = st.columns(2)
 
-        with col3:
+        with p3:
             if COL_SALES_CYCLE in flt.columns:
                 sc_pct = value_counts_pct(flt[COL_SALES_CYCLE])
                 bar_chart_from_pct(
@@ -567,37 +616,99 @@ def main():
                     unsafe_allow_html=True,
                 )
 
-        with col4:
+        with p4:
             if COL_WIN_RATE in flt.columns:
                 win_rate_distribution_pct(flt, COL_WIN_RATE)
 
     # ===== Geography tab =====
     with tab_geo:
-        create_section_header("Regional view (percentages)")
+        create_section_header("Regional distribution (percentages)")
 
         if COL_REGION in flt.columns:
             region_pct = value_counts_pct(flt[COL_REGION])
-            col1, col2 = st.columns([1, 1])
 
-            with col1:
-                donut_chart_from_pct(region_pct, "category", "pct", "Region share of respondents")
+            g1, g2 = st.columns(2)
 
-            with col2:
-                bar_chart_from_pct(region_pct, "category", "pct", "Region share (bar view)", horizontal=True)
+            with g1:
+                donut_chart_from_pct(
+                    region_pct,
+                    "category",
+                    "pct",
+                    "Region share of respondents",
+                )
+
+            with g2:
+                bar_chart_from_pct(
+                    region_pct,
+                    "category",
+                    "pct",
+                    "Region share (bar view)",
+                    horizontal=True,
+                )
 
             st.markdown(
                 '<div class="chart-caption">Percentages are relative to all respondents in the current filter.</div>',
                 unsafe_allow_html=True,
             )
 
-        # Region by revenue band (within-region percentages)
+            # --- Map view (using percentages) ---
+            create_section_header("Regional map (bubble size = share of respondents)")
+
+            # Map basic region names to lat/lon
+            region_coords = {
+                "North America": (40.0, -100.0),
+                "Latin America": (-20.0, -60.0),
+                "Europe": (50.0, 10.0),
+                "Asia Pacific": (20.0, 100.0),
+                "Asia-Pacific": (20.0, 100.0),
+                "APAC": (20.0, 100.0),
+            }
+
+            map_df = region_pct.copy()
+            map_df["lat"] = map_df["category"].map(lambda r: region_coords.get(r, (None, None))[0])
+            map_df["lon"] = map_df["category"].map(lambda r: region_coords.get(r, (None, None))[1])
+            map_df = map_df.dropna(subset=["lat", "lon"])
+
+            if not map_df.empty:
+                # Radius scaled by percentage
+                layer = pdk.Layer(
+                    "ScatterplotLayer",
+                    map_df,
+                    get_position=["lon", "lat"],
+                    get_radius="pct * 120000",  # tune for visual balance
+                    get_fill_color=[59, 48, 143, 180],
+                    pickable=True,
+                )
+
+                view_state = pdk.ViewState(
+                    latitude=20,
+                    longitude=0,
+                    zoom=1,
+                    pitch=0,
+                )
+
+                deck = pdk.Deck(
+                    layers=[layer],
+                    initial_view_state=view_state,
+                    tooltip={"text": "{category}\nShare: {pct}%"},
+                )
+                st.pydeck_chart(deck)
+                st.markdown(
+                    '<div class="chart-caption">Bubble size reflects the percentage share of respondents in each region, not raw counts.</div>',
+                    unsafe_allow_html=True,
+                )
+
+        # Region x Revenue (within-region %)
         if COL_REGION in flt.columns and COL_REVENUE in flt.columns:
-            create_section_header("Revenue bands by region (within-region %)")
+            create_section_header("Revenue bands by region (within-region share)")
 
             tmp = flt[[COL_REGION, COL_REVENUE]].dropna()
             if not tmp.empty:
-                # compute within-region percentages
-                total_by_region = tmp.groupby(COL_REGION)[COL_REVENUE].count().rename("total")
+                total_by_region = (
+                    tmp.groupby(COL_REGION)[COL_REVENUE]
+                    .count()
+                    .rename("total")
+                )
                 cross = (
                     tmp.groupby([COL_REGION, COL_REVENUE])[COL_REVENUE]
                     .count()
@@ -607,12 +718,15 @@ def main():
                 cross = cross.merge(total_by_region, on=COL_REGION, how="left")
                 cross["pct"] = cross["count"] / cross["total"] * 100.0
 
-                # build chart
                 chart = (
                     alt.Chart(cross)
                     .mark_bar()
                     .encode(
-                        x=alt.X("pct:Q", title="Share within region (%)", axis=alt.Axis(format=".0f")),
+                        x=alt.X(
+                            "pct:Q",
+                            title="Share within region (%)",
+                            axis=alt.Axis(format=".0f"),
+                        ),
                         y=alt.Y(f"{COL_REGION}:N", title=None),
                         color=alt.Color(f"{COL_REVENUE}:N", title="Revenue band"),
                         tooltip=[
@@ -621,11 +735,12 @@ def main():
                             alt.Tooltip("pct:Q", title="Share (%)", format=".1f"),
                         ],
                     )
-                    .properties(height=320)
+                    .properties(height=340)
+                    .interactive()
                 )
                 st.altair_chart(chart, use_container_width=True)
                 st.markdown(
-                    '<div class="chart-caption">Bars show the percentage of companies in each region that fall into each revenue band.</div>',
+                    '<div class="chart-caption">Within each region, bars show how respondents are distributed across revenue bands (percentages sum to ~100% per region).</div>',
                     unsafe_allow_html=True,
                 )
 
@@ -638,20 +753,32 @@ def main():
         )
         infl_pct = multi_select_pct(flt, col_prefix=influence_prefix)
         if not infl_pct.empty:
-            bar_chart_from_pct(infl_pct, "option", "pct", "Share of companies using each influence metric", horizontal=True)
+            bar_chart_from_pct(
+                infl_pct,
+                "option",
+                "pct",
+                "Share of companies using each influence metric",
+                horizontal=True,
+            )
             st.markdown(
-                '<div class="chart-caption">Percentages are based on all respondents; each company can select multiple metrics.</div>',
+                '<div class="chart-caption">Percentages are based on all respondents in the current filter; each company can select multiple metrics.</div>',
                 unsafe_allow_html=True,
             )
 
         create_section_header("Partnership types in place today")
-        # The Qualtrics export truncated this question text with "hav..."
+
         types_substr = "Which of the following Partnership types does your company hav"
         types_pct = multi_select_pct(flt, contains_substring=types_substr)
         if not types_pct.empty:
-            bar_chart_from_pct(types_pct, "option", "pct", "Share of companies with each partnership type", horizontal=True)
+            bar_chart_from_pct(
+                types_pct,
+                "option",
+                "pct",
+                "Share of companies with each partnership type",
+                horizontal=True,
+            )
             st.markdown(
-                '<div class="chart-caption">Percentages are based on all respondents; each company can select multiple partnership types.</div>',
+                '<div class="chart-caption">Percentages are based on all respondents in the current filter; each company can select multiple partnership types.</div>',
                 unsafe_allow_html=True,
             )
 
@@ -659,7 +786,6 @@ def main():
     with tab_data:
         create_section_header("Filtered data")
 
-        # Simple column subset picker
         cols_available = flt.columns.tolist()
         default_cols = [
             COL_REGION,
@@ -681,15 +807,16 @@ def main():
 
         st.dataframe(flt[selected_cols], use_container_width=True)
 
+    # ---- Footer ----
     st.markdown("---")
     st.markdown(
-        "<div style='text-align:center; color:#64748b; font-size:0.85rem;'>"
+        "<div style='text-align:center; color:#64748b !important; font-size:0.85rem;'>"
         "SOPL 2025 Insights Platform • Partnership analytics and strategic insights"
         "</div>",
         unsafe_allow_html=True,
     )
 
-    # ===== Embedded Pickaxe assistant (always visible, main page) =====
+    # ===== Embedded Pickaxe assistant (always visible, large) =====
     st.markdown("## Assistant (SOPL Q&A)")
     st.markdown(
         "<div class='chart-caption'>Use this assistant to ask questions about what you're seeing in the dashboard.</div>",
