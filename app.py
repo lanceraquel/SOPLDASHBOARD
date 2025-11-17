@@ -6,7 +6,7 @@ import streamlit.components.v1 as components
 
 # ==================== PAGE CONFIG ====================
 st.set_page_config(
-    page_title="SOPL 2025 - Partnership Analytics",
+    page_title="STATE OF PARTNERSHIP LEADERS 2025 - Partnership Analytics",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",
