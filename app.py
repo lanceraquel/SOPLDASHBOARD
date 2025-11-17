@@ -7,7 +7,7 @@ import streamlit.components.v1 as components
 # ==================== PAGE CONFIG ====================
 st.set_page_config(
     page_title="SOPL 2025 - Partnership Analytics",
-    page_icon="📊",
+    page_icon="",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -558,7 +558,7 @@ def main():
     # TAB 0 – EXECUTIVE SUMMARY (KPI CARDS + NARRATIVE)
     # ======================================================
     with tab_overview:
-        create_section_header("Executive summary – current filter")
+        create_section_header("Executive summary")
 
         # Top industry
         top_industry_name = None
