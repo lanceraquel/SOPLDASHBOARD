@@ -228,10 +228,12 @@ def load_raw(uploaded, encoding_override: str | None = None):
         st.error("Could not decode upload. Try XLSX or re-save CSV as UTF-8.")
 
     # Fallback to local file if present — "data living in there permanently"
-    if os.path.exists(LOCAL_FALLBACK):
-        if LOCAL_FALLBACK.lower().endswith((".xlsx", ".xls")):
+    # Fallback to local file if present
+    if LOCAL_FALLBACK.exists():
+        lf = str(LOCAL_FALLBACK)
+        if lf.lower().endswith((".xlsx", ".xls")):
             try:
-                return pd.read_excel(LOCAL_FALLBACK)
+                return pd.read_excel(lf)
             except Exception as e:
                 st.warning(f"Local Excel fallback failed: {e}")
 
@@ -242,16 +244,16 @@ def load_raw(uploaded, encoding_override: str | None = None):
             for enc in encs2:
                 try:
                     if allow_replace:
-                        df = pd.read_csv(LOCAL_FALLBACK, encoding=enc, sep=None, engine="python",
+                        df = pd.read_csv(lf, encoding=enc, sep=None, engine="python",
                                          on_bad_lines="skip", encoding_errors="replace")
                     else:
-                        df = pd.read_csv(LOCAL_FALLBACK, encoding=enc, sep=None, engine="python",
+                        df = pd.read_csv(lf, encoding=enc, sep=None, engine="python",
                                          on_bad_lines="skip")
                     df = _repair_replacement_chars(df)
                     return df
                 except Exception:
                     continue
-        st.error("Local fallback exists but could not be decoded.")
+        st.error(f"Local fallback exists at {lf} but could not be decoded.")
     return pd.DataFrame()
 
 SYN = {
