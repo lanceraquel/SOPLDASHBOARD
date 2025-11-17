@@ -121,16 +121,19 @@ html, body, .stApp, .stApp * {
 /* Vega/Altair actions menu (export, fullscreen) – make it light, not black */
 .vega-embed .vega-actions {
     background: #ffffff !important;
-    color: #020617 !important;
-    box-shadow: 0 4px 12px rgba(15,23,42,0.2);
+    border: 1px solid #e2e8f0 !important;
+    color: #1e293b !important;
+    border-radius: 6px !important;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
 }
 .vega-embed .vega-actions a {
-    color: #020617 !important;
+    color: #1e293b !important;
+    font-weight: 500 !important;
 }
 .vega-embed summary {
-    background: #e5e7eb !important;
-    color: #020617 !important;
-    border-radius: 999px;
+    background: #ffffff !important;
+    border-radius: 50% !important;
+    border: 1px solid #e2e8f0 !important;
 }
 
 /* Make axis labels more likely to show fully */
