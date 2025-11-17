@@ -200,15 +200,6 @@ html, body, .stApp, .stApp * {
     margin-bottom: 1.5rem;
 }
 
-/* Filter Summary */
-.filter-summary {
-    background: #f8fafc;
-    border-radius: 10px;
-    padding: 1rem 1.5rem;
-    margin: 1rem 0;
-    border-left: 4px solid #3b308f;
-}
-
 /* Enhanced Footer */
 .footer {
     text-align: center;
@@ -247,6 +238,42 @@ html, body, .stApp, .stApp * {
     padding: 1.5rem;
     margin: 2rem 0 1rem 0;
     border: 1px solid #e2e8f0;
+}
+
+/* FIXED: Altair/Vega actions menu - light theme with visible text */
+.vega-embed .vega-actions {
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    color: #020617 !important;
+    border-radius: 6px !important;
+    box-shadow: 0 4px 12px rgba(15,23,42,0.18);
+    padding: 4px 8px !important;
+}
+.vega-embed .vega-actions a {
+    color: #020617 !important;
+    font-weight: 500 !important;
+}
+
+/* Fix fullscreen / menu icon color */
+.vega-embed details > summary svg {
+    stroke: #020617 !important;
+    fill: #020617 !important;
+}
+.vega-embed details {
+    color: #020617 !important;
+}
+.vega-embed details > summary {
+    background-color:#ffffff !important;
+    border-radius:50% !important;
+    border:1px solid #e2e8f0 !important;
+}
+.vega-embed details[open] > summary {
+    box-shadow:0 2px 6px rgba(15,23,42,0.2);
+}
+
+/* Make axis labels more likely to show fully */
+.vega-embed text {
+    font-size: 11px;
 }
 </style>
 """,
@@ -562,29 +589,6 @@ def kpi_card(title: str, value: str, subtitle: str | None = None, accent: bool =
     st.markdown(html, unsafe_allow_html=True)
 
 
-def create_filter_summary(flt, df, selected_regions, selected_revenue, selected_employees):
-    """Create a summary of applied filters."""
-    total_respondents = len(df)
-    filtered_respondents = len(flt)
-    filter_percentage = (filtered_respondents / total_respondents * 100) if total_respondents > 0 else 0
-    
-    summary_html = f"""
-    <div class="filter-summary">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
-            <div>
-                <strong>📊 Dataset Summary:</strong> Showing {filtered_respondents:,} of {total_respondents:,} respondents ({filter_percentage:.1f}%)
-            </div>
-            <div style="font-size: 0.9rem; color: #64748b;">
-                {len(selected_regions) if selected_regions else 'All'} regions • 
-                {len(selected_revenue) if selected_revenue else 'All'} revenue bands • 
-                {len(selected_employees) if selected_employees else 'All'} employee sizes
-            </div>
-        </div>
-    </div>
-    """
-    st.markdown(summary_html, unsafe_allow_html=True)
-
-
 # ==================== ENHANCED MAIN APP ====================
 def main():
     st.markdown('<div class="app-wrapper">', unsafe_allow_html=True)
@@ -701,7 +705,6 @@ def main():
     # ======================================================
     with tab_overview:
         create_section_header("Executive Summary")
-        create_filter_summary(flt, df, selected_regions, selected_revenue, selected_employees)
 
         # Calculate KPIs
         # Top industry
@@ -885,7 +888,6 @@ def main():
     # ======================================================
     with tab_performance:
         create_section_header("Partner Performance Metrics")
-        create_filter_summary(flt, df, selected_regions, selected_revenue, selected_employees)
 
         st.markdown("""
         <div style="background: #f0f9ff; border-radius: 12px; padding: 1.5rem; margin: 1rem 0; border-left: 4px solid #3b308f;">
@@ -949,7 +951,6 @@ def main():
     # ======================================================
     with tab_geo:
         create_section_header("Geographical Distribution")
-        create_filter_summary(flt, df, selected_regions, selected_revenue, selected_employees)
 
         if "RegionStd" in flt.columns:
             region_pct = value_counts_pct(flt["RegionStd"])
@@ -1033,7 +1034,6 @@ def main():
     # ======================================================
     with tab_multi:
         create_section_header("Partner Influence & Types")
-        create_filter_summary(flt, df, selected_regions, selected_revenue, selected_employees)
 
         st.markdown("""
         <div style="background: #f0f9ff; border-radius: 12px; padding: 1.5rem; margin: 1rem 0; border-left: 4px solid #3b308f;">
@@ -1078,7 +1078,6 @@ def main():
     # ======================================================
     with tab_data:
         create_section_header("Data Explorer")
-        create_filter_summary(flt, df, selected_regions, selected_revenue, selected_employees)
 
         st.markdown("""
         <div style="background: #f8fafc; border-radius: 12px; padding: 1.5rem; margin: 1rem 0;">
