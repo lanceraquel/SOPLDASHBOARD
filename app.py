@@ -11,6 +11,7 @@ import streamlit.components.v1 as components
 import pydeck as pdk
 import json
 from difflib import SequenceMatcher
+from pathlib import Path
 
 # ==================== PAGE CONFIG ====================
 st.set_page_config(
@@ -152,7 +153,8 @@ alt.themes.register("light_simple", light_theme)
 alt.themes.enable("light_simple")
 
 # ==================== DATA PROCESSING ====================
-LOCAL_FALLBACK = "SOPL 1002 Results - Raw.csv"
+APP_DIR = Path(__file__).parent
+LOCAL_FALLBACK = APP_DIR / "data" / "SOPL 1002 Results - Raw.csv"
 
 def normalize(txt: str) -> str:
     if txt is None: return ""
