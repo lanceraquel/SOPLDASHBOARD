@@ -373,8 +373,11 @@ def value_counts_pct(series: pd.Series) -> pd.DataFrame:
     s = series.dropna()
     if s.empty:
         return pd.DataFrame(columns=["category", "pct"])
+    
     counts = s.value_counts()
-    pct = (counts / counts.sum()) * 100.0
+    total_non_null = len(s)  # Use only non-null responses as denominator
+    pct = (counts / total_non_null) * 100.0
+    
     out = pct.reset_index()
     out.columns = ["category", "pct"]
     return out
@@ -397,13 +400,11 @@ def multi_select_pct(
     if not cols:
         return pd.DataFrame(columns=["option", "pct"])
 
-    # Count total selections across all options
     total_selections = 0
     selection_counts = {}
     
     for c in cols:
         col = df[c]
-        # Count selections (1, 1.0, True)
         selected = ((col == 1) | (col == 1.0) | (col == True)).sum()
         selection_counts[c] = selected
         total_selections += selected
@@ -411,7 +412,6 @@ def multi_select_pct(
     rows = []
     for c in cols:
         selected = selection_counts[c]
-        # Calculate percentage of total selections
         pct = (selected / total_selections * 100.0) if total_selections > 0 else 0.0
         
         label = c.split("_", 1)[1] if "_" in c else c
