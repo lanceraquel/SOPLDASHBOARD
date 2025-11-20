@@ -383,7 +383,7 @@ def multi_select_pct(
     rows = []
     for c in cols:
         col = df[c]
-        selected = ((col == 1) | (col == 1.0) | (col is True)).sum()
+        selected = ((col == 1) | (col == 1.0) | (col == True)).sum()
         pct = (selected / n * 100.0) if n > 0 else 0.0
         label = c.split("_", 1)[1] if "_" in c else c
         rows.append({"option": label, "pct": pct})
@@ -532,8 +532,11 @@ def win_rate_distribution_pct(df: pd.DataFrame, col: str):
         "Win rate distribution (10-point bands)",
         horizontal=False,
     )
+    # Centered note under the chart
     st.markdown(
-        '<div class="chart-caption">Percentages are based on respondents who answered the win-rate question.</div>',
+        '<div class="chart-caption" style="text-align:center;">'
+        'Percentages are based on respondents who answered the win-rate question.'
+        '</div>',
         unsafe_allow_html=True,
     )
 
@@ -627,7 +630,7 @@ def main():
 <div id="deployment-5870ff7d-8fcf-4395-976b-9e9fdefbb0ff" style="width:100%; max-width:1200px; margin:0 auto;"></div>
 <script src="https://studio.pickaxe.co/api/embed/bundle.js" defer></script>
 """
-    components.html(pickaxe_html, height=450, scrolling=True)
+    components.html(pickaxe_html, height=320, scrolling=True)
 
     # ---- Load data ----
     df = load_data()
@@ -715,9 +718,9 @@ def main():
     if selected_employees:
         flt = flt[flt[COL_EMPLOYEES].isin(selected_employees)]
 
-    # ---- Tabs ----
-    tab_overview, tab_performance, tab_geo, tab_multi, tab_data = st.tabs(
-        ["Overview", "Performance", "Geography", "Partner & Impact", "Data"]
+    # ---- Tabs (no Data tab) ----
+    tab_overview, tab_performance, tab_geo, tab_multi = st.tabs(
+        ["Overview", "Performance", "Geography", "Partner & Impact"]
     )
 
     # ======================================================
@@ -1109,49 +1112,6 @@ def main():
             st.markdown("</div>", unsafe_allow_html=True)
         else:
             st.info("No partnership-type multi-select columns detected for the current dataset.")
-
-    # ======================================================
-    # DATA TAB
-    # ======================================================
-    with tab_data:
-        create_section_header("Data explorer")
-
-        cols_available = flt.columns.tolist()
-        default_cols = [
-            COL_REGION,
-            "RegionStd",
-            COL_INDUSTRY,
-            COL_REVENUE,
-            COL_EMPLOYEES,
-            COL_DEAL_SIZE,
-            COL_CAC,
-            COL_SALES_CYCLE,
-            COL_WIN_RATE,
-        ]
-        default_cols = [c for c in default_cols if c in cols_available]
-
-        selected_cols = st.multiselect(
-            "Columns to display",
-            options=cols_available,
-            default=default_cols if default_cols else cols_available[:8],
-        )
-
-        st.markdown(
-            f"**Displaying {len(flt)} rows and {len(selected_cols)} columns in the current filter.**"
-        )
-
-        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-        st.dataframe(flt[selected_cols], use_container_width=True, height=400)
-        st.markdown("</div>", unsafe_allow_html=True)
-
-        csv_bytes = flt[selected_cols].to_csv(index=False).encode("utf-8")
-        st.download_button(
-            "Download filtered data as CSV",
-            csv_bytes,
-            "sopl_filtered.csv",
-            "text/csv",
-            use_container_width=True,
-        )
 
     # ---- Footer ----
     st.markdown(
