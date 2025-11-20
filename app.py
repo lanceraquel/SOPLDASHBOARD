@@ -35,10 +35,11 @@ main.block-container {
 
 /* Sidebar enhancements */
 [data-testid="stSidebar"] {
-    background-color: #f9fafb !important;
-    border-right: 1px solid #e2e8f0;
+    background-color: #0b1120 !important; /* dark sidebar */
+    border-right: 1px solid #1e293b;
 }
 
+/* Sidebar controls */
 [data-testid="stSidebar"] .stSelectbox,
 [data-testid="stSidebar"] .stMultiSelect {
     margin-bottom: 1rem;
@@ -142,21 +143,23 @@ main.block-container {
     margin: 1.5rem 0;
 }
 
-/* Widget polish */
+/* Widget polish + brand colors for filters */
 .stSelectbox > div > div,
 .stMultiSelect > div > div {
     border-radius: 10px;
-    border-color: #d4d4d8;
+    border-color: #ec3d72;
     transition: all 0.2s ease;
+    background-color: #020617;   /* dark field background */
+    color: #f9fafb !important;
 }
 
 .stSelectbox > div > div:hover,
 .stMultiSelect > div > div:hover {
-    border-color: #3b308f;
-    box-shadow: 0 0 0 3px rgba(59, 48, 143, 0.1);
+    border-color: #f97373;
+    box-shadow: 0 0 0 3px rgba(236, 61, 114, 0.4);
 }
 
-/* Multiselect tags aligned to brand colors */
+/* Multiselect tags aligned to brand */
 .stMultiSelect [data-baseweb="tag"] {
     background-color: #ec3d72 !important;  /* Amaranth */
     color: #ffffff !important;
@@ -167,31 +170,46 @@ main.block-container {
 /* Tabs */
 .stTabs [data-baseweb="tab-list"] {
     gap: 8px;
-    background-color: #f8fafc;
+    background-color: #020617;
     padding: 4px;
     border-radius: 12px;
 }
 
+/* Base tab style */
 .stTabs [data-baseweb="tab"] {
     font-size: 0.95rem;
     font-weight: 600;
-    border-radius: 8px;
-    padding: 8px 16px;
+    border-radius: 999px;
+    padding: 8px 18px;
     transition: all 0.2s ease;
+    border: none;
 }
 
-/* Selected tab: dark background + white text */
+/* Selected tab: dark-purple with white text, subtle underline accent */
 .stTabs [data-baseweb="tab"][aria-selected="true"] {
     background-color: #3b308f;
     color: #ffffff !important;
+    box-shadow: 0 0 0 1px #3b308f, 0 10px 18px rgba(0,0,0,0.35);
 }
+.stTabs [data-baseweb="tab"][aria-selected="true"]::after {
+    content: "";
+    display:block;
+    height: 3px;
+    width: 60%;
+    margin: 4px auto 0;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #ec3d72, #f97373);
+}
+
+/* Ensure all children text is white in the active tab */
 .stTabs [data-baseweb="tab"][aria-selected="true"] * {
     color: #ffffff !important;
 }
 
 /* Unselected tab */
 .stTabs [data-baseweb="tab"][aria-selected="false"] {
-    color: #64748b !important;
+    background-color: transparent;
+    color: #e5e7eb !important;
 }
 
 /* Vega/Altair actions menu (export, fullscreen) – light theme */
@@ -244,7 +262,7 @@ main.block-container {
 .assistant-header {
     background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
     border-radius: 12px;
-    padding: 1.5rem;
+    padding: 1.25rem 1.5rem;
     margin: 1.5rem 0 1rem 0;
     border: 1px solid #e2e8f0;
 }
@@ -630,7 +648,7 @@ def main():
 <div id="deployment-5870ff7d-8fcf-4395-976b-9e9fdefbb0ff" style="width:100%; max-width:1200px; margin:0 auto;"></div>
 <script src="https://studio.pickaxe.co/api/embed/bundle.js" defer></script>
 """
-    components.html(pickaxe_html, height=320, scrolling=True)
+    components.html(pickaxe_html, height=280, scrolling=True)
 
     # ---- Load data ----
     df = load_data()
@@ -727,20 +745,23 @@ def main():
     # OVERVIEW TAB – Methodology + Executive snapshot + profile
     # ======================================================
     with tab_overview:
-        # Methodology / how-to paragraph
+        # Methodology / how-to paragraph (Tai’s request)
         create_section_header("About this dashboard and dataset")
         st.markdown(
             """
 <div class="chart-container" style="margin-top:0;">
   <p>
-  Respondents represent organizations from four key regions—North America (NA), Europe the Middle East and Africa (EMEA),
-  Asia Pacific (APAC), and Latin America (LATAM)—and include companies of varying sizes and revenue levels, ranging from
-  less than 50 million dollars to more than 10 billion dollars in annual revenue. Each survey wave ensures a minimum of
-  100 qualified respondents to provide consistent, data-driven insights across regions and industries.
+  Respondents represent organizations from four key regions, namely North America (NA),
+  Europe the Middle East and Africa (EMEA), Asia Pacific (APAC), and Latin America (LATAM),
+  and include companies of varying sizes and revenue levels ranging from less than 50 million
+  dollars to over 10 billion dollars in annual revenue. All survey waves ensure a minimum of
+  100 qualified respondents each year to provide consistent and data-driven insights across regions
+  and industries.
   </p>
   <p style="margin-top:0.5rem;">
-  Use the filters on the left (Region, Annual revenue band, Total employees) to narrow the view; the KPIs and charts on
-  this page and in other tabs update automatically to reflect the current selection.
+  Use the filters on the left (Region, Annual revenue band, Total employees) to narrow the view;
+  the KPIs and charts on this page and in the other tabs update automatically to reflect the
+  current selection.
   </p>
 </div>
 """,
