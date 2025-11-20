@@ -648,7 +648,7 @@ def main():
 <div id="deployment-5870ff7d-8fcf-4395-976b-9e9fdefbb0ff" style="width:100%; max-width:1200px; margin:0 auto;"></div>
 <script src="https://studio.pickaxe.co/api/embed/bundle.js" defer></script>
 """
-    components.html(pickaxe_html, height=500, scrolling=False)
+    components.html(pickaxe_html, height=700, scrolling=False)
 
     # ---- Load data ----
     df = load_data()
