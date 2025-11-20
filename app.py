@@ -19,6 +19,7 @@ st.markdown(
 /* Force light background everywhere */
 html, body, .stApp {
     background-color: #ffffff !important;
+    color: #020617;
 }
 
 /* Main view container */
@@ -55,11 +56,6 @@ main.block-container {
     --warning: #f59e0b;
     --danger: #ef4444;
     --glass: rgba(15,23,42,0.04);
-}
-
-/* Make sure ALL text is dark and readable on white */
-html, body, .stApp, .stApp * {
-    color: #020617 !important;
 }
 
 /* Layout + typography */
@@ -160,6 +156,14 @@ html, body, .stApp, .stApp * {
     box-shadow: 0 0 0 3px rgba(59, 48, 143, 0.1);
 }
 
+/* Multiselect tags aligned to brand colors */
+.stMultiSelect [data-baseweb="tag"] {
+    background-color: #ec3d72 !important;  /* Amaranth */
+    color: #ffffff !important;
+    border-radius: 999px !important;
+    font-weight: 600 !important;
+}
+
 /* Tabs */
 .stTabs [data-baseweb="tab-list"] {
     gap: 8px;
@@ -176,11 +180,16 @@ html, body, .stApp, .stApp * {
     transition: all 0.2s ease;
 }
 
+/* Selected tab: dark background + white text */
 .stTabs [data-baseweb="tab"][aria-selected="true"] {
     background-color: #3b308f;
-    color: white !important;
+    color: #ffffff !important;
+}
+.stTabs [data-baseweb="tab"][aria-selected="true"] * {
+    color: #ffffff !important;
 }
 
+/* Unselected tab */
 .stTabs [data-baseweb="tab"][aria-selected="false"] {
     color: #64748b !important;
 }
@@ -236,7 +245,7 @@ html, body, .stApp, .stApp * {
     background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
     border-radius: 12px;
     padding: 1.5rem;
-    margin: 2rem 0 1rem 0;
+    margin: 1.5rem 0 1rem 0;
     border: 1px solid #e2e8f0;
 }
 
@@ -374,7 +383,7 @@ def multi_select_pct(
     rows = []
     for c in cols:
         col = df[c]
-        selected = ((col == 1) | (col == 1.0) | (col == True)).sum()
+        selected = ((col == 1) | (col == 1.0) | (col is True)).sum()
         pct = (selected / n * 100.0) if n > 0 else 0.0
         label = c.split("_", 1)[1] if "_" in c else c
         rows.append({"option": label, "pct": pct})
@@ -601,6 +610,26 @@ def main():
         unsafe_allow_html=True,
     )
 
+    # ---- Assistant at top (smaller) ----
+    st.markdown(
+        """
+        <div class="assistant-header">
+            <h2 style='color:#020617; margin:0;'>Assistant (SOPL Q&amp;A)</h2>
+            <p style='color:#64748b; margin:0.5rem 0 0 0;'>
+                Ask questions about the SOPL dataset, methodology, or what you are seeing in the dashboard.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    pickaxe_html = """
+<div id="deployment-5870ff7d-8fcf-4395-976b-9e9fdefbb0ff" style="width:100%; max-width:1200px; margin:0 auto;"></div>
+<script src="https://studio.pickaxe.co/api/embed/bundle.js" defer></script>
+"""
+    components.html(pickaxe_html, height=450, scrolling=True)
+
+    # ---- Load data ----
     df = load_data()
     if df.empty:
         st.stop()
@@ -692,9 +721,29 @@ def main():
     )
 
     # ======================================================
-    # OVERVIEW TAB – Executive snapshot + company profile
+    # OVERVIEW TAB – Methodology + Executive snapshot + profile
     # ======================================================
     with tab_overview:
+        # Methodology / how-to paragraph
+        create_section_header("About this dashboard and dataset")
+        st.markdown(
+            """
+<div class="chart-container" style="margin-top:0;">
+  <p>
+  Respondents represent organizations from four key regions—North America (NA), Europe the Middle East and Africa (EMEA),
+  Asia Pacific (APAC), and Latin America (LATAM)—and include companies of varying sizes and revenue levels, ranging from
+  less than 50 million dollars to more than 10 billion dollars in annual revenue. Each survey wave ensures a minimum of
+  100 qualified respondents to provide consistent, data-driven insights across regions and industries.
+  </p>
+  <p style="margin-top:0.5rem;">
+  Use the filters on the left (Region, Annual revenue band, Total employees) to narrow the view; the KPIs and charts on
+  this page and in other tabs update automatically to reflect the current selection.
+  </p>
+</div>
+""",
+            unsafe_allow_html=True,
+        )
+
         # -------- Executive snapshot (KPIs) --------
         create_section_header("Executive snapshot")
 
@@ -760,18 +809,22 @@ def main():
             kpi_card(
                 "Top industry by respondents",
                 top_industry_name or "—",
-                subtitle=f"Share of respondents: {top_industry_pct:.1f}%"
-                if top_industry_pct is not None
-                else None,
+                subtitle=(
+                    f"Share of respondents: {top_industry_pct:.1f}%"
+                    if top_industry_pct is not None
+                    else None
+                ),
                 accent=True,
             )
         with col2:
             kpi_card(
                 "Top HQ region",
                 top_region_name or "—",
-                subtitle=f"Share of respondents: {top_region_pct:.1f}%"
-                if top_region_pct is not None
-                else None,
+                subtitle=(
+                    f"Share of respondents: {top_region_pct:.1f}%"
+                    if top_region_pct is not None
+                    else None
+                ),
             )
         with col3:
             kpi_card(
@@ -1112,23 +1165,6 @@ def main():
         """,
         unsafe_allow_html=True,
     )
-
-    # ===== Assistant section (no emoji) =====
-    st.markdown(
-        """
-        <div class="assistant-header">
-            <h2 style='color:#020617; margin:0;'>Assistant (SOPL Q&amp;A)</h2>
-            <p style='color:#64748b; margin:0.5rem 0 0 0;'>Use this assistant to ask questions about what you're seeing in the dashboard.</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    pickaxe_html = """
-<div id="deployment-5870ff7d-8fcf-4395-976b-9e9fdefbb0ff" style="width:100%; max-width:1200px; margin:0 auto;"></div>
-<script src="https://studio.pickaxe.co/api/embed/bundle.js" defer></script>
-"""
-    components.html(pickaxe_html, height=650, scrolling=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
 
