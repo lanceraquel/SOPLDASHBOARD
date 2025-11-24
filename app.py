@@ -279,8 +279,6 @@ main.block-container {
 
 /* =========================================================
    FIX: REMOVE EMPTY RECTANGLES ABOVE CHARTS
-   These hide empty Streamlit blocks that are picking up
-   chart-container styling / column spacing.
    ========================================================= */
 .chart-container:empty {
     display: none !important;
@@ -460,7 +458,6 @@ def donut_chart_with_labels(
 
     donut = base.mark_arc(innerRadius=70, stroke="#fff", strokeWidth=2)
 
-    # Only draw text when PercentLabel isn't empty
     text = base.transform_filter(
         alt.datum.PercentLabel != ""
     ).mark_text(
@@ -473,7 +470,8 @@ def donut_chart_with_labels(
         title=alt.TitleParams(title, fontSize=16, fontWeight=700, anchor="start"),
     ).configure_view(strokeWidth=0)
 
-    st.altair_chart(chart, use_container_width=True)
+    # Zoom/Pan enabled
+    st.altair_chart(chart.interactive(), use_container_width=True)
 
 def bar_chart_from_pct(
     df_pct: pd.DataFrame, cat_field: str, pct_field: str, title: str, horizontal: bool = True
@@ -551,17 +549,37 @@ def bar_chart_from_pct(
             title=alt.TitleParams(title, fontSize=16, fontWeight=700, anchor="start"),
         )
 
-    st.altair_chart(chart, use_container_width=True)
+    # Zoom/Pan enabled
+    st.altair_chart(chart.interactive(), use_container_width=True)
 
-def win_rate_distribution_pct(df: pd.DataFrame, col: str):
+def binned_pct_from_numeric(series: pd.Series, bin_width: int, min_val=0, max_val=100):
+    """
+    Bin numeric series into adjustable-width bins.
+    Returns df with columns: bin, pct.
+    """
+    s = pd.to_numeric(series, errors="coerce").dropna()
+    if s.empty:
+        return pd.DataFrame(columns=["bin", "pct"])
+
+    bins = list(range(min_val, max_val + bin_width, bin_width))
+    if bins[-1] < max_val:
+        bins.append(max_val)
+
+    labels = []
+    for i in range(len(bins) - 1):
+        a, b = bins[i], bins[i + 1]
+        labels.append(f"{a}–{b}%")
+
+    binned = pd.cut(s, bins=bins, labels=labels, include_lowest=True, right=False)
+    pct_df = value_counts_pct(binned).rename(columns={"category": "bin"})
+    return pct_df
+
+def win_rate_distribution_pct(df: pd.DataFrame, col: str, bin_width: int = 10):
     series = df[col].dropna()
     if series.empty:
         return False
 
-    bins = list(range(0, 101, 10))
-    labels = [f"{b}–{b+10}%" for b in bins[:-1]]
-    binned = pd.cut(series, bins=bins, labels=labels, include_lowest=True, right=False)
-    pct_df = value_counts_pct(binned).rename(columns={"category": "bin"})
+    pct_df = binned_pct_from_numeric(series, bin_width=bin_width, min_val=0, max_val=100)
     if pct_df.empty:
         return False
 
@@ -569,7 +587,7 @@ def win_rate_distribution_pct(df: pd.DataFrame, col: str):
         pct_df,
         "bin",
         "pct",
-        "Win rate distribution (10-point bands)",
+        f"Win rate distribution ({bin_width}-point bands)",
         horizontal=False,
     )
     st.markdown(
@@ -613,7 +631,6 @@ def normalize_yes_no(series: pd.Series) -> pd.Series:
     if s.empty:
         return series
 
-    # If numeric/boolean-ish, map to Yes/No
     coerced = pd.to_numeric(series, errors="coerce")
     if coerced.notna().any() and coerced.dropna().isin([0, 1]).all():
         return coerced.map({1: "Yes", 0: "No"})
@@ -847,27 +864,52 @@ def main():
             bar_chart_from_pct(sc_pct, "category", "pct", "Partner-led sales cycle vs direct", horizontal=True)
 
         wr_has = COL_WIN_RATE in flt.columns and not flt[COL_WIN_RATE].dropna().empty
+
+        # Adjustable bin width slider for win rate
+        wr_bin = st.slider(
+            "Adjust win rate bin width (%)",
+            min_value=5,
+            max_value=25,
+            value=10,
+            step=5,
+            key="wr_bin_slider"
+        )
+
         def wr_chart():
-            win_rate_distribution_pct(flt, COL_WIN_RATE)
+            win_rate_distribution_pct(flt, COL_WIN_RATE, bin_width=wr_bin)
 
         two_up_or_full(sc_has, sc_chart, wr_has, wr_chart)
 
         create_section_header("Retention of partner-referred customers")
         if COL_RETENTION and COL_RETENTION in flt.columns:
             ret_has = not flt[COL_RETENTION].dropna().empty
+
+            # Adjustable bin width slider for retention
+            ret_bin = st.slider(
+                "Adjust retention bin width (%)",
+                min_value=5,
+                max_value=25,
+                value=20,
+                step=5,
+                key="ret_bin_slider"
+            )
+
             def ret_chart():
-                ret_series = pd.to_numeric(flt[COL_RETENTION], errors="coerce")
-                if ret_series.notna().any():
-                    bins = [0, 51, 76, 96, 101, 9999]
-                    labels = ["0–50%", "51–75%", "76–95%", "96–100%", "More than 100%"]
-                    binned = pd.cut(ret_series, bins=bins, labels=labels, include_lowest=True, right=False)
-                    ret_pct = value_counts_pct(binned).rename(columns={"category": "bin"})
+                ret_series = pd.to_numeric(flt[COL_RETENTION], errors="coerce").dropna()
+                if not ret_series.empty:
+                    ret_pct = binned_pct_from_numeric(ret_series, bin_width=ret_bin, min_val=0, max_val=100)
                     if not ret_pct.empty:
-                        bar_chart_from_pct(ret_pct, "bin", "pct", "Retention rate distribution", horizontal=False)
+                        bar_chart_from_pct(
+                            ret_pct, "bin", "pct",
+                            f"Retention rate distribution ({ret_bin}-point bands)",
+                            horizontal=False
+                        )
                 else:
+                    # fallback for non-numeric retention
                     ret_pct = value_counts_pct(flt[COL_RETENTION].astype(str))
                     if not ret_pct.empty:
                         bar_chart_from_pct(ret_pct, "category", "pct", "Retention rate distribution", horizontal=True)
+
             render_container_if(ret_has, ret_chart)
 
     # ======================================================
@@ -893,20 +935,32 @@ def main():
         create_section_header("Expected revenue from partnerships (next 12 months)")
         if COL_EXPECTED_REV and COL_EXPECTED_REV in flt.columns:
             er_has = not flt[COL_EXPECTED_REV].dropna().empty
+
+            # Adjustable bin width for expected revenue share
+            exp_bin = st.slider(
+                "Adjust expected revenue bin width (%)",
+                min_value=5,
+                max_value=25,
+                value=25,
+                step=5,
+                key="exp_bin_slider"
+            )
+
             def er_chart():
-                exp = flt[COL_EXPECTED_REV].dropna()
-                as_num = pd.to_numeric(exp, errors="coerce")
-                if as_num.notna().any():
-                    bins = [0, 50, 75, 100, 9999]
-                    labels = ["Less than 50%", "50–75%", "75–100%", "More than 100%"]
-                    binned = pd.cut(as_num, bins=bins, labels=labels, include_lowest=True, right=False)
-                    exp_pct = value_counts_pct(binned).rename(columns={"category": "bin"})
+                exp_num = pd.to_numeric(flt[COL_EXPECTED_REV], errors="coerce").dropna()
+                if not exp_num.empty:
+                    exp_pct = binned_pct_from_numeric(exp_num, bin_width=exp_bin, min_val=0, max_val=100)
                     if not exp_pct.empty:
-                        bar_chart_from_pct(exp_pct, "bin", "pct", "Expected revenue share from partnerships", horizontal=False)
+                        bar_chart_from_pct(
+                            exp_pct, "bin", "pct",
+                            f"Expected revenue share from partnerships ({exp_bin}-point bands)",
+                            horizontal=False
+                        )
                 else:
-                    exp_pct = value_counts_pct(exp.astype(str))
+                    exp_pct = value_counts_pct(flt[COL_EXPECTED_REV].astype(str))
                     if not exp_pct.empty:
                         bar_chart_from_pct(exp_pct, "category", "pct", "Expected revenue share from partnerships", horizontal=True)
+
             render_container_if(er_has, er_chart)
 
     # ======================================================
@@ -1002,7 +1056,7 @@ def main():
                 donut_chart_with_labels(
                     ai_pct, "category", "pct",
                     "Currently using AI",
-                    exclude_label_categories=["Not sure"]  # <-- remove slice text overlay for Not sure
+                    exclude_label_categories=["Not sure"]
                 )
             render_container_if(ai_has, ai_chart)
 
@@ -1047,15 +1101,26 @@ def main():
             mp_rev = flt[COL_MARKETPLACE_REV].dropna()
             mp_has = not mp_rev.empty
 
+            # Adjustable bin width for marketplace revenue
+            mp_bin = st.slider(
+                "Adjust marketplace revenue bin width (%)",
+                min_value=5,
+                max_value=25,
+                value=10,
+                step=5,
+                key="mp_bin_slider"
+            )
+
             def mp_chart():
-                as_num = pd.to_numeric(mp_rev, errors="coerce")
-                if as_num.notna().any():
-                    bins = [0, 5, 15, 30, 50, 9999]
-                    labels = ["Less than 5%", "5–15%", "15–30%", "30–50%", "More than 50%"]
-                    binned = pd.cut(as_num, bins=bins, labels=labels, include_lowest=True, right=False)
-                    mp_rev_pct = value_counts_pct(binned).rename(columns={"category": "bin"})
+                mp_num = pd.to_numeric(mp_rev, errors="coerce").dropna()
+                if not mp_num.empty:
+                    mp_rev_pct = binned_pct_from_numeric(mp_num, bin_width=mp_bin, min_val=0, max_val=100)
                     if not mp_rev_pct.empty:
-                        bar_chart_from_pct(mp_rev_pct, "bin", "pct", "Marketplace revenue share", horizontal=False)
+                        bar_chart_from_pct(
+                            mp_rev_pct, "bin", "pct",
+                            f"Marketplace revenue share ({mp_bin}-point bands)",
+                            horizontal=False
+                        )
                 else:
                     mp_rev_pct = value_counts_pct(mp_rev.astype(str))
                     if not mp_rev_pct.empty:
