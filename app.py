@@ -276,6 +276,26 @@ main.block-container {
         grid-template-columns: 1fr;
     }
 }
+
+/* =========================================================
+   FIX: REMOVE EMPTY RECTANGLES ABOVE CHARTS
+   These hide empty Streamlit blocks that are picking up
+   chart-container styling / column spacing.
+   ========================================================= */
+.chart-container:empty {
+    display: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+.chart-container > div:empty,
+.chart-container > p:empty {
+    display: none !important;
+}
+div[data-testid="column"]:empty {
+    display: none !important;
+}
 </style>
 """,
     unsafe_allow_html=True,
@@ -409,10 +429,24 @@ def multi_select_pct(
 def create_section_header(title: str):
     st.markdown(f'<div class="section-header">{title}</div>', unsafe_allow_html=True)
 
-def donut_chart_with_labels(df_pct: pd.DataFrame, cat_field: str, pct_field: str, title: str):
+def donut_chart_with_labels(
+    df_pct: pd.DataFrame,
+    cat_field: str,
+    pct_field: str,
+    title: str,
+    exclude_label_categories: list[str] | None = None
+):
+    if df_pct.empty:
+        return
+
     data = df_pct.copy().rename(columns={pct_field: "Percent"})
     data[cat_field] = data[cat_field].astype(str)
-    data["PercentLabel"] = data["Percent"].map(lambda v: f"{v:.1f}%")
+
+    exclude_set = set(exclude_label_categories or [])
+    data["PercentLabel"] = data.apply(
+        lambda r: "" if r[cat_field] in exclude_set else f"{r['Percent']:.1f}%",
+        axis=1
+    )
 
     base = alt.Chart(data).encode(
         theta=alt.Theta("Percent:Q", stack=True),
@@ -423,8 +457,13 @@ def donut_chart_with_labels(df_pct: pd.DataFrame, cat_field: str, pct_field: str
         ),
         tooltip=[f"{cat_field}:N", alt.Tooltip("Percent:Q", format=".1f")],
     )
+
     donut = base.mark_arc(innerRadius=70, stroke="#fff", strokeWidth=2)
-    text = base.mark_text(
+
+    # Only draw text when PercentLabel isn't empty
+    text = base.transform_filter(
+        alt.datum.PercentLabel != ""
+    ).mark_text(
         radius=115, size=12, fontWeight=600, color="#020617"
     ).encode(text=alt.Text("PercentLabel:N"))
 
@@ -439,6 +478,9 @@ def donut_chart_with_labels(df_pct: pd.DataFrame, cat_field: str, pct_field: str
 def bar_chart_from_pct(
     df_pct: pd.DataFrame, cat_field: str, pct_field: str, title: str, horizontal: bool = True
 ):
+    if df_pct.empty:
+        return
+
     data = df_pct.copy().rename(columns={pct_field: "Percent"})
     data[cat_field] = data[cat_field].astype(str)
     data["PercentLabel"] = data["Percent"].map(lambda v: f"{v:.1f}%")
@@ -465,6 +507,7 @@ def bar_chart_from_pct(
                 alt.Tooltip("Percent:Q", format=".1f", title="Percentage"),
             ],
         )
+
         bars = base.mark_bar(color="#3b308f", cornerRadius=4)
         labels = base.mark_text(
             align="left", baseline="middle", dx=4, color="#020617", fontWeight=600
@@ -561,7 +604,29 @@ def find_col(df: pd.DataFrame, exact: str | None=None, substrings: list[str] | N
                 return matches[0]
     return None
 
-# ---- NEW: only render container when data exists ----
+def normalize_yes_no(series: pd.Series) -> pd.Series:
+    """
+    Convert common 0/1, True/False, yes/no variants into clean Yes/No labels.
+    Leaves other strings unchanged.
+    """
+    s = series.dropna()
+    if s.empty:
+        return series
+
+    # If numeric/boolean-ish, map to Yes/No
+    coerced = pd.to_numeric(series, errors="coerce")
+    if coerced.notna().any() and coerced.dropna().isin([0, 1]).all():
+        return coerced.map({1: "Yes", 0: "No"})
+
+    lower = series.astype(str).str.strip().str.lower()
+    mapping = {
+        "1": "Yes", "1.0": "Yes", "true": "Yes", "yes": "Yes",
+        "0": "No", "0.0": "No", "false": "No", "no": "No",
+    }
+    mapped = lower.map(mapping)
+    return mapped.where(mapped.notna(), series.astype(str))
+
+# ---- Rendering guards ----
 def render_container_if(has_data: bool, chart_fn):
     if not has_data:
         return
@@ -569,7 +634,6 @@ def render_container_if(has_data: bool, chart_fn):
     chart_fn()
     st.markdown("</div>", unsafe_allow_html=True)
 
-# ---- NEW: two-up only if BOTH have data ----
 def two_up_or_full(left_has: bool, left_fn, right_has: bool, right_fn):
     if left_has and right_has:
         c1, c2 = st.columns(2)
@@ -763,13 +827,11 @@ def main():
     with tab_perf:
         create_section_header("Partner performance metrics")
 
-        # Deal size
         ds_has = COL_DEAL_SIZE in flt.columns and not flt[COL_DEAL_SIZE].dropna().empty
         def ds_chart():
             ds_pct = value_counts_pct(flt[COL_DEAL_SIZE])
             bar_chart_from_pct(ds_pct, "category", "pct", "Average deal size: partner vs direct", horizontal=True)
 
-        # CAC
         cac_has = COL_CAC in flt.columns and not flt[COL_CAC].dropna().empty
         def cac_chart():
             cac_pct = value_counts_pct(flt[COL_CAC])
@@ -806,7 +868,6 @@ def main():
                     ret_pct = value_counts_pct(flt[COL_RETENTION].astype(str))
                     if not ret_pct.empty:
                         bar_chart_from_pct(ret_pct, "category", "pct", "Retention rate distribution", horizontal=True)
-
             render_container_if(ret_has, ret_chart)
 
     # ======================================================
@@ -927,7 +988,10 @@ def main():
             ut_pct = value_counts_pct(flt[COL_USE_TECH])
             ut_has = not ut_pct.empty
             def ut_chart():
-                donut_chart_with_labels(ut_pct, "category", "pct", "Currently using partner tech/automation")
+                donut_chart_with_labels(
+                    ut_pct, "category", "pct",
+                    "Currently using partner tech/automation"
+                )
             render_container_if(ut_has, ut_chart)
 
         create_section_header("Use of AI in the partner organization")
@@ -935,7 +999,11 @@ def main():
             ai_pct = value_counts_pct(flt[COL_USE_AI])
             ai_has = not ai_pct.empty
             def ai_chart():
-                donut_chart_with_labels(ai_pct, "category", "pct", "Currently using AI")
+                donut_chart_with_labels(
+                    ai_pct, "category", "pct",
+                    "Currently using AI",
+                    exclude_label_categories=["Not sure"]  # <-- remove slice text overlay for Not sure
+                )
             render_container_if(ai_has, ai_chart)
 
         create_section_header("Common tools used to manage partnerships (multi-select)")
@@ -943,7 +1011,11 @@ def main():
         tools_pct = multi_select_pct(flt, contains_substring=tools_substr)
         tools_has = not tools_pct.empty
         def tools_chart():
-            bar_chart_from_pct(tools_pct, "option", "pct", "Tools used to manage partnerships (categories)", horizontal=True)
+            bar_chart_from_pct(
+                tools_pct, "option", "pct",
+                "Tools used to manage partnerships (categories)",
+                horizontal=True
+            )
             st.markdown(
                 '<div class="chart-caption">'
                 "Tool names are shown as generic categories only."
@@ -957,17 +1029,24 @@ def main():
     # ======================================================
     with tab_market:
         create_section_header("Listed in marketplaces")
+
         if COL_MARKETPLACE_LISTED and COL_MARKETPLACE_LISTED in flt.columns:
-            mpl_pct = value_counts_pct(flt[COL_MARKETPLACE_LISTED])
+            mpl_series = normalize_yes_no(flt[COL_MARKETPLACE_LISTED])
+            mpl_pct = value_counts_pct(mpl_series)
             mpl_has = not mpl_pct.empty
+
             def mpl_chart():
-                donut_chart_with_labels(mpl_pct, "category", "pct", "Company listed in marketplaces")
+                donut_chart_with_labels(
+                    mpl_pct, "category", "pct",
+                    "Company listed in marketplaces"
+                )
             render_container_if(mpl_has, mpl_chart)
 
         create_section_header("Revenue from marketplaces")
         if COL_MARKETPLACE_REV and COL_MARKETPLACE_REV in flt.columns:
             mp_rev = flt[COL_MARKETPLACE_REV].dropna()
             mp_has = not mp_rev.empty
+
             def mp_chart():
                 as_num = pd.to_numeric(mp_rev, errors="coerce")
                 if as_num.notna().any():
@@ -999,7 +1078,11 @@ def main():
         infl_pct = multi_select_pct(flt, contains_substring=influence_substr)
         infl_has = not infl_pct.empty
         def infl_chart():
-            bar_chart_from_pct(infl_pct, "option", "pct", "Partner influence measurement methods", horizontal=True)
+            bar_chart_from_pct(
+                infl_pct, "option", "pct",
+                "Partner influence measurement methods",
+                horizontal=True
+            )
         render_container_if(infl_has, infl_chart)
 
         create_section_header("Partnership ecosystem (types)")
@@ -1007,7 +1090,11 @@ def main():
         types_pct2 = multi_select_pct(flt, contains_substring=types_substr)
         types_has2 = not types_pct2.empty
         def types2_chart():
-            bar_chart_from_pct(types_pct2, "option", "pct", "Partnership types in place today", horizontal=True)
+            bar_chart_from_pct(
+                types_pct2, "option", "pct",
+                "Partnership types in place today",
+                horizontal=True
+            )
         render_container_if(types_has2, types2_chart)
 
     # ---- Footer ----
