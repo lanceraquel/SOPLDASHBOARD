@@ -672,6 +672,29 @@ def main():
         unsafe_allow_html=True,
     )
 
+    # ---- Welcome text (Tai copy) ----
+    st.markdown(
+        """
+<div class="chart-container" style="margin-top:0;">
+  <p>
+  Welcome to the State of Partnership Leaders 2025 dashboard. In prior years, we have released a 40+ page document with all of the data but with the advancements in AI adoption, we are trying something new.
+  </p>
+  <p><strong>Below you will find:</strong></p>
+  <ul>
+    <li>
+      <strong>PartnerOps Agent</strong> - An AI agent trained on the SOPL dataset - think of it as your Partner Operations collaborator as you review the data.
+      You can ask it questions about the data or about your own strategy, we will not collect any of your inputed data.
+    </li>
+    <li>
+      <strong>SOPL Data Dashboard</strong> - You will find all of the data from the report in an interactive dashboard below.
+      Use the filters on the left to customize the data to your interests and the Performance, and Partner Impact tabs to navigate the main themes.
+    </li>
+  </ul>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
     # ---- Assistant widget ----
     st.markdown(
         """
