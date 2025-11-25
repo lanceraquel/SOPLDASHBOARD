@@ -1219,7 +1219,7 @@ def main():
 
             render_container_if(ts_has, ts_chart)
 
-        create_section_header("Annual partnerships budget (including headcount)")
+        create_section_header("Annual partnerships budget")
         if COL_BUDGET and COL_BUDGET in flt.columns:
             bud_series = flt[COL_BUDGET].dropna().astype(str)
             bud_series = bud_series[
