@@ -1215,7 +1215,7 @@ def main():
 
             def ts_chart():
                 ts_pct = value_counts_pct(flt[COL_TEAM_SIZE])
-                donut_chart_clean(ts_pct, "category", "pct", "Partnerships team size")
+                donut_chart_clean(ts_pct, "category", "pct")
 
             render_container_if(ts_has, ts_chart)
 
@@ -1233,7 +1233,6 @@ def main():
                     bud_pct,
                     "category",
                     "pct",
-                    "Annual partnerships budget",
                     horizontal=True,
                 )
                 st.markdown(
@@ -1290,7 +1289,6 @@ def main():
                         df_bud,
                         "category",
                         "pct",
-                        "Top 3 Budget Line Items",
                         horizontal=True,
                         max_categories=10,
                     )
