@@ -241,6 +241,25 @@ main.block-container {
     margin: 1.5rem 0 1rem 0;
     border: 1px solid #e2e8f0;
 }
+.filter-pill-row {
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-top:0.75rem;
+    margin-bottom:1.5rem;
+}
+.filter-pill {
+    padding:4px 10px;
+    border-radius:999px;
+    background: #e2e8f0;
+    color:#0f172a;
+    font-size:0.8rem;
+    font-weight:600;
+}
+.filter-pill span {
+    font-weight:400;
+    opacity:0.8;
+}
 @media (max-width: 768px) {
     .main-header {
         font-size: 2.2rem;
@@ -282,10 +301,10 @@ def atlas_light_theme():
                 "labelColor": "#475569",
                 "titleColor": "#020617",
                 "titleFontWeight": 600,
-                "labelFontWeight": 600, 
+                "labelFontWeight": 600,  # bold axis labels
                 "gridColor": "#f1f5f9",
                 "domainColor": "#d4d4d8",
-                "labelLimit": 0,       
+                "labelLimit": 0,  # no truncation / ellipsis
                 "labelFontSize": 11,
                 "titleFontSize": 12,
             },
@@ -435,7 +454,7 @@ def bar_chart_from_pct(
                 f"{cat_field}:N",
                 sort="-x",
                 title=None,
-                axis=alt.Axis(labelLimit=320, labelOverlap=False, labelFontSize=11),
+                axis=alt.Axis(labelOverlap=False),
             ),
             color=alt.Color(
                 f"{cat_field}:N",
@@ -468,10 +487,8 @@ def bar_chart_from_pct(
                 sort="-y",
                 title=None,
                 axis=alt.Axis(
-                    labelLimit=280,
                     labelOverlap=False,
                     labelAngle=0,
-                    labelFontSize=11,
                 ),
             ),
             y=alt.Y(
@@ -583,9 +600,9 @@ def two_up_or_full(left_has: bool, left_fn, right_has: bool, right_fn):
 
 def clean_question_title(col_name: str) -> str:
     """Remove _Column2 etc and stray underscores in question labels."""
-    title = re.sub(r"_Column\\d+", "", col_name)
+    title = re.sub(r"_Column\d+", "", col_name)
     title = title.replace("_", " ")
-    title = re.sub(r"\\s+", " ", title).strip()
+    title = re.sub(r"\s+", " ", title).strip()
     return title
 
 
@@ -603,15 +620,39 @@ def extract_platform_tool(col_name: str) -> str | None:
         return None
     tail = parts[1]
     # Remove Column suffix
-    tail = re.sub(r"_Column\\d+", "", tail)
+    tail = re.sub(r"_Column\d+", "", tail)
     # Strip underscores and spaces
     tail = tail.strip(" _-")
     if not tail:
         return None
     # Clean remaining underscores/brackets
     tail = tail.replace("_", " ")
-    tail = re.sub(r"\\s+", " ", tail)
+    tail = re.sub(r"\s+", " ", tail)
     return tail.strip()
+
+
+def render_filter_pills(selected_regions, selected_revenue, selected_employees):
+    pills = []
+    if selected_regions:
+        pills.append(f"Region: <span>{', '.join(selected_regions)}</span>")
+    else:
+        pills.append("Region: <span>All</span>")
+
+    if selected_revenue:
+        pills.append(f"Revenue: <span>{', '.join(selected_revenue)}</span>")
+    else:
+        pills.append("Revenue: <span>All bands</span>")
+
+    if selected_employees:
+        pills.append(f"Employees: <span>{', '.join(selected_employees)}</span>")
+    else:
+        pills.append("Employees: <span>All sizes</span>")
+
+    html = "<div class='filter-pill-row'>" + "".join(
+        f"<div class='filter-pill'>{p}</div>" for p in pills
+    ) + "</div>"
+
+    st.markdown(html, unsafe_allow_html=True)
 
 
 # ==================== MAIN APP ====================
@@ -626,29 +667,6 @@ def main():
     <div class="main-header">STATE OF PARTNERSHIP LEADERS 2025</div>
     <div class="sub-header">Strategic Insights Dashboard • Partnership Performance Analytics</div>
   </div>
-</div>
-""",
-        unsafe_allow_html=True,
-    )
-
-    # ---- Welcome text (Tai copy) ----
-    st.markdown(
-        """
-<div class="chart-container" style="margin-top:0;">
-  <p>
-  Welcome to the State of Partnership Leaders 2025 dashboard. In prior years, we have released a 40+ page document with all of the data but with the advancements in AI adoption, we are trying something new.
-  </p>
-  <p><strong>Below you will find:</strong></p>
-  <ul>
-    <li>
-      <strong>PartnerOps Agent</strong> - An AI agent trained on the SOPL dataset - think of it as your Partner Operations collaborator as you review the data.
-      You can ask it questions about the data or about your own strategy, we will not collect any of your inputed data.
-    </li>
-    <li>
-      <strong>SOPL Data Dashboard</strong> - You will find all of the data from the report in an interactive dashboard below.
-      Use the filters on the left to customize the data to your interests and the Performance, and Partner Impact tabs to navigate the main themes.
-    </li>
-  </ul>
 </div>
 """,
         unsafe_allow_html=True,
@@ -759,6 +777,9 @@ def main():
         flt = flt[flt[COL_REVENUE].isin(selected_revenue)]
     if selected_employees:
         flt = flt[flt[COL_EMPLOYEES].isin(selected_employees)]
+
+    # ---- Filter summary pills ----
+    render_filter_pills(selected_regions, selected_revenue, selected_employees)
 
     # ---- About section ----
     create_section_header("About this dashboard and dataset")
@@ -1251,6 +1272,19 @@ def main():
     with tab_extra:
         create_section_header("Additional insights across remaining questions")
 
+        st.markdown(
+            """
+<div class="chart-container" style="margin-top:0;">
+  <p style="margin-bottom:0.5rem;">
+    This section surfaces additional multiple-choice questions that are not already covered in the main tabs.
+    Vendor-specific, numeric-only, and free-text style questions are excluded to keep the view focused on
+    interpretable categorical insights.
+  </p>
+</div>
+""",
+            unsafe_allow_html=True,
+        )
+
         skip_substrings = [
             "StartDate",
             "EndDate",
@@ -1290,6 +1324,7 @@ def main():
             "sap",
             "workday",
         ]
+        vendor_pattern = re.compile("|".join(vendor_keywords), re.IGNORECASE)
 
         extra_questions: list[dict] = []
 
@@ -1316,8 +1351,8 @@ def main():
             if n_unique <= 1 or n_unique > 12:
                 continue
 
-            lower_vals = s_nonnull.astype(str).str.lower()
-            if any(lower_vals.str.contains(kw, na=False).any() for kw in vendor_keywords):
+            # skip vendor-specific questions
+            if s_nonnull.astype(str).str.contains(vendor_pattern, na=False).any():
                 continue
 
             cat_pct = value_counts_pct(series)
