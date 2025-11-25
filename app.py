@@ -654,36 +654,26 @@ def main():
     # ---- Header ----
     st.markdown(
         """
-<div class="header-row">
-  <div>
-    <div class="main-header">STATE OF PARTNERSHIP LEADERS 2025</div>
-    <div class="sub-header">Strategic Insights Dashboard • Partnership Performance Analytics</div>
-  </div>
-</div>
-""",
+    <div class="header-row">
+      <div>
+        <div class="main-header">STATE OF PARTNERSHIP LEADERS 2025</div>
+        <div class="sub-header">Strategic Insights Dashboard • Partnership Performance Analytics</div>
+      </div>
+    </div>
+    """,
         unsafe_allow_html=True,
     )
 
-    # ---- Welcome text (Tai copy) ----
+    # ---- Assistant widget ----
     st.markdown(
         """
-<div class="chart-container" style="margin-top:0;">
-  <p>
-  Welcome to the State of Partnership Leaders 2025 dashboard. In prior years, we have released a 40+ page document with all of the data but with the advancements in AI adoption, we are trying something new.
-  </p>
-  <p><strong>Below you will find:</strong></p>
-  <ul>
-    <li>
-      <strong>PartnerOps Agent</strong> - An AI agent trained on the SOPL dataset - think of it as your Partner Operations collaborator as you review the data.
-      You can ask it questions about the data or about your own strategy, we will not collect any of your inputed data.
-    </li>
-    <li>
-      <strong>SOPL Data Dashboard</strong> - You will find all of the data from the report in an interactive dashboard below.
-      Use the filters on the left to customize the data to your interests and the Performance, and Partner Impact tabs to navigate the main themes.
-    </li>
-  </ul>
-</div>
-""",
+        <div class="assistant-header">
+            <h2 style='color:#020617; margin:0;'>Assistant (SOPL Q&amp;A)</h2>
+            <p style='color:#64748b; margin:0.5rem 0 0 0;'>
+                Ask questions about the SOPL dataset, methodology, or what you are seeing in the dashboard.
+            </p>
+        </div>
+        """,
         unsafe_allow_html=True,
     )
 
@@ -737,6 +727,11 @@ def main():
     COL_PARTNER_FOCUS = find_col(df, substrings=["focus next 12 months"])
     COL_STRATEGIC_BET = find_col(df, substrings=["Strategic bet", "strategic bet next 12 months"])
     COL_FORECAST_PERF = find_col(df, substrings=["Forecasted performance", "forecasting your performance"])
+
+    # Additional portfolio-related metrics (exact names from dataset)
+    COL_TOTAL_PARTNERS = "How many total partners do you have?"
+    COL_ACTIVE_PARTNERS = "How many active partners generated revenue in the last 12 months?"
+    COL_TIME_TO_REVENUE = "How long does it typically take for a partnership to generate revenue after the first meeting?"
 
     # Additional fields from updated dataset
     COL_REPORTING = find_col(df, substrings=["report to", "majority of your partner organization report"])
@@ -856,6 +851,9 @@ def main():
             COL_FORECAST_PERF,
             COL_REPORTING,
             COL_TRAINING,
+            COL_TOTAL_PARTNERS,
+            COL_ACTIVE_PARTNERS,
+            COL_TIME_TO_REVENUE,
             "RegionStd",
         ]
         if c is not None
@@ -1137,6 +1135,114 @@ def main():
 
             render_container_if(mi_has, mi_chart)
 
+        # New: Partnership types your company currently has (multi-select counts)
+        create_section_header("Partnership types your company has")
+        part_cols = [c for c in flt.columns if "Which of the following Partnership types does your company have?" in c]
+        if part_cols:
+            counts = {}
+            for col in part_cols:
+                # convert to numeric 1/0 for selected/unselected
+                s = pd.to_numeric(flt[col], errors="coerce")
+                total_selected = s.sum(skipna=True)
+                if total_selected > 0:
+                    # take the label after the underscore
+                    label = col.split("_")[-1]
+                    counts[label] = total_selected
+            if counts:
+                df_part = (
+                    pd.DataFrame.from_dict(counts, orient="index", columns=["count"])
+                    .reset_index()
+                    .rename(columns={"index": "category"})
+                )
+                # compute percentage relative to number of responses after filtering
+                if len(flt) > 0:
+                    df_part["pct"] = (df_part["count"] / len(flt)) * 100
+                else:
+                    df_part["pct"] = 0
+
+                def part_chart():
+                    bar_chart_from_pct(
+                        df_part,
+                        "category",
+                        "pct",
+                        "Current partnership types",
+                        horizontal=True,
+                        max_categories=10,
+                    )
+
+                render_container_if(True, part_chart)
+
+        # New: Partnership types you plan to expand into (multi-select counts)
+        create_section_header("Partnership types you plan to expand into")
+        expand_cols = [c for c in flt.columns if "which partnership types are you planning to expand" in c.lower()]
+        if expand_cols:
+            counts_expand = {}
+            for col in expand_cols:
+                s = pd.to_numeric(flt[col], errors="coerce")
+                total_selected = s.sum(skipna=True)
+                if total_selected > 0:
+                    label = col.split("_")[-1]
+                    counts_expand[label] = total_selected
+            if counts_expand:
+                df_expand = (
+                    pd.DataFrame.from_dict(counts_expand, orient="index", columns=["count"])
+                    .reset_index()
+                    .rename(columns={"index": "category"})
+                )
+                # percent relative to filtered respondents
+                if len(flt) > 0:
+                    df_expand["pct"] = (df_expand["count"] / len(flt)) * 100
+                else:
+                    df_expand["pct"] = 0
+
+                def expand_chart():
+                    bar_chart_from_pct(
+                        df_expand,
+                        "category",
+                        "pct",
+                        "Partnership types planned for expansion",
+                        horizontal=True,
+                        max_categories=10,
+                    )
+
+                render_container_if(True, expand_chart)
+
+        # New: Distribution of total partners count
+        create_section_header("Total partners count")
+        if COL_TOTAL_PARTNERS and COL_TOTAL_PARTNERS in flt.columns:
+            total_has = not flt[COL_TOTAL_PARTNERS].dropna().empty
+
+            def total_chart():
+                total_pct = value_counts_pct(flt[COL_TOTAL_PARTNERS])
+                bar_chart_from_pct(
+                    total_pct,
+                    "category",
+                    "pct",
+                    "Number of total partners",
+                    horizontal=False,
+                    max_categories=TOP_N_DEFAULT,
+                )
+
+            render_container_if(total_has, total_chart)
+
+        # New: Active partners generating revenue
+        create_section_header("Active partners generating revenue")
+        if COL_ACTIVE_PARTNERS and COL_ACTIVE_PARTNERS in flt.columns:
+            active_has = not flt[COL_ACTIVE_PARTNERS].dropna().empty
+
+            def active_chart():
+                active_pct = value_counts_pct(flt[COL_ACTIVE_PARTNERS])
+                bar_chart_from_pct(
+                    active_pct,
+                    "category",
+                    "pct",
+                    "Active partners generating revenue (last 12 months)",
+                    horizontal=False,
+                    max_categories=TOP_N_DEFAULT,
+                )
+
+            render_container_if(active_has, active_chart)
+
     # ======================================================
     # CHALLENGES & RISKS
     # ======================================================
@@ -1215,11 +1321,11 @@ def main():
 
             def ts_chart():
                 ts_pct = value_counts_pct(flt[COL_TEAM_SIZE])
-                donut_chart_clean(ts_pct, "category", "pct")
+                donut_chart_clean(ts_pct, "category", "pct", "Partnerships team size")
 
             render_container_if(ts_has, ts_chart)
 
-        create_section_header("Annual partnerships budget")
+        create_section_header("Annual partnerships budget (including headcount)")
         if COL_BUDGET and COL_BUDGET in flt.columns:
             bud_series = flt[COL_BUDGET].dropna().astype(str)
             bud_series = bud_series[
@@ -1233,6 +1339,7 @@ def main():
                     bud_pct,
                     "category",
                     "pct",
+                    "Annual partnerships budget",
                     horizontal=True,
                 )
                 st.markdown(
@@ -1264,7 +1371,7 @@ def main():
             render_container_if(rep_has, rep_chart)
 
         # New section: Top 3 Budget Line Items (excluding headcount)
-        create_section_header("Top 3 budget line items")
+        create_section_header("Top 3 budget line items (excluding headcount)")
         # Determine multi-select columns for top 3 budget items by prefix
         budget_item_cols = [c for c in flt.columns if COL_TOP3_BUDGET_PREFIX in c]
         if budget_item_cols:
@@ -1289,6 +1396,7 @@ def main():
                         df_bud,
                         "category",
                         "pct",
+                        "Top 3 Budget Line Items",
                         horizontal=True,
                         max_categories=10,
                     )
