@@ -1,6 +1,6 @@
 import altair as alt
 import pandas as pd
-import pydeck as pdk
+import pydeck as pdk  # still imported in case you want later; not used now
 import streamlit as st
 import streamlit.components.v1 as components
 
@@ -13,7 +13,6 @@ st.set_page_config(
 )
 
 # ==================== BRAND COLORS ====================
-# Core PL palette + a couple of lighter tints ONLY (no limed spruce / gray in charts)
 PL_CORE = {
     "amaranth": "#EC3D72",
     "casablanca": "#F9A644",
@@ -37,6 +36,9 @@ PL_COLORS = [
     PL_TINTS["casablanca_light"],
     PL_TINTS["cerulean_light"],
 ]
+
+TOP_N_DEFAULT = 4  # Top 4 categories everywhere
+
 
 # ==================== ENHANCED CSS / LIGHT THEME ====================
 st.markdown(
@@ -102,7 +104,7 @@ main.block-container {
     border-bottom: 1px solid #e2e8f0;
 }
 
-/* MAIN TITLE – Amaranth + gradient */
+/* MAIN TITLE – gradient */
 .main-header {
     font-size: 2.8rem;
     font-weight: 900;
@@ -409,65 +411,37 @@ def value_counts_pct(series: pd.Series) -> pd.DataFrame:
     return out
 
 
-def multi_select_pct(
-    df: pd.DataFrame, col_prefix: str | None = None, contains_substring: str | None = None
-) -> pd.DataFrame:
+def binned_pct_custom(series: pd.Series, edges: list[float], labels: list[str]) -> pd.DataFrame:
     """
-    Qualtrics-style multi-select (one column per option with 1 / NaN).
-    Denominator = respondents who selected at least one option.
+    Bin numeric values into custom bins and return % distribution.
     """
-    if col_prefix:
-        cols = [c for c in df.columns if c.startswith(col_prefix)]
-    elif contains_substring:
-        cols = [c for c in df.columns if contains_substring in c]
-    else:
-        return pd.DataFrame(columns=["option", "pct"])
-
-    if not cols:
-        return pd.DataFrame(columns=["option", "pct"])
-
-    sub = df[cols]
-    selected_matrix = sub.apply(
-        lambda col: (col == 1) | (col == 1.0) | (col == True)
-    )
-    respondents_answered = selected_matrix.any(axis=1)
-    n_resp = respondents_answered.sum()
-    if n_resp == 0:
-        return pd.DataFrame(columns=["option", "pct"])
-
-    rows = []
-    for c in cols:
-        selected = selected_matrix.loc[respondents_answered, c].sum()
-        pct = (selected / n_resp) * 100.0
-        label = c.split("_", 1)[1] if "_" in c else c
-        rows.append({"option": label, "pct": pct})
-
-    out = pd.DataFrame(rows).sort_values("pct", ascending=False)
-    return out
+    s = pd.to_numeric(series, errors="coerce").dropna()
+    if s.empty:
+        return pd.DataFrame(columns=["bin", "pct"])
+    binned = pd.cut(s, bins=edges, labels=labels, include_lowest=True, right=False)
+    pct_df = value_counts_pct(binned).rename(columns={"category": "bin"})
+    return pct_df
 
 
 def create_section_header(title: str):
     st.markdown(f'<div class="section-header">{title}</div>', unsafe_allow_html=True)
 
 
-def donut_chart_with_labels(
+def donut_chart_clean(
     df_pct: pd.DataFrame,
     cat_field: str,
     pct_field: str,
     title: str,
-    exclude_label_categories: list[str] | None = None,
 ):
+    """
+    Donut chart WITHOUT value labels on slices.
+    Legend + tooltip only.
+    """
     if df_pct.empty:
         return
 
     data = df_pct.copy().rename(columns={pct_field: "Percent"})
     data[cat_field] = data[cat_field].astype(str)
-
-    exclude_set = set(exclude_label_categories or [])
-    data["PercentLabel"] = data.apply(
-        lambda r: "" if r[cat_field] in exclude_set else f"{r['Percent']:.1f}%",
-        axis=1,
-    )
 
     base = alt.Chart(data).encode(
         theta=alt.Theta("Percent:Q", stack=True),
@@ -481,16 +455,7 @@ def donut_chart_with_labels(
 
     donut = base.mark_arc(innerRadius=70, stroke="#fff", strokeWidth=2)
 
-    text = base.transform_filter(
-        alt.datum.PercentLabel != ""
-    ).mark_text(
-        radius=115,
-        size=12,
-        fontWeight=600,
-        color="#020617",
-    ).encode(text=alt.Text("PercentLabel:N"))
-
-    chart = (donut + text).properties(
+    chart = donut.properties(
         width=400,
         height=400,
         title=alt.TitleParams(title, fontSize=16, fontWeight=700, anchor="start"),
@@ -505,12 +470,11 @@ def bar_chart_from_pct(
     pct_field: str,
     title: str,
     horizontal: bool = True,
-    max_categories: int = 12,
-    min_pct: float = 2.0,
+    max_categories: int = TOP_N_DEFAULT,
+    min_pct: float | None = None,
 ):
     """
-    Branded bar chart with % labels only.
-    Auto-trims long tails.
+    Branded bar chart with % labels, top-N only, sorted descending.
     """
     if df_pct.empty:
         return
@@ -528,7 +492,6 @@ def bar_chart_from_pct(
         return
 
     data["PercentLabel"] = data["Percent"].map(lambda v: f"{v:.1f}%")
-
     max_percent = data["Percent"].max()
     domain_max = 100 if max_percent <= 100 else None
 
@@ -544,7 +507,7 @@ def bar_chart_from_pct(
                 f"{cat_field}:N",
                 sort="-x",
                 title=None,
-                axis=alt.Axis(labelLimit=280, labelOverlap=False, labelFontSize=11),
+                axis=alt.Axis(labelLimit=320, labelOverlap=False, labelFontSize=11),
             ),
             tooltip=[
                 f"{cat_field}:N",
@@ -562,7 +525,7 @@ def bar_chart_from_pct(
         ).encode(text=alt.Text("PercentLabel:N"))
 
         chart = (bars + labels).properties(
-            height=max(300, 35 * len(data)),
+            height=max(260, 32 * len(data)),
             title=alt.TitleParams(title, fontSize=16, fontWeight=700, anchor="start"),
         ).configure_axisY(labelPadding=8)
     else:
@@ -589,6 +552,7 @@ def bar_chart_from_pct(
                 alt.Tooltip("Percent:Q", format=".1f", title="Percentage"),
             ],
         )
+
         bars = base.mark_bar(color=PL_CORE["minsk"], cornerRadius=4)
         labels = base.mark_text(
             align="center",
@@ -604,19 +568,6 @@ def bar_chart_from_pct(
         )
 
     st.altair_chart(chart, use_container_width=True)
-
-
-def binned_pct_custom(series: pd.Series, edges: list[float], labels: list[str]) -> pd.DataFrame:
-    """
-    Bin numeric % values into custom bins.
-    """
-    s = pd.to_numeric(series, errors="coerce").dropna()
-    if s.empty:
-        return pd.DataFrame(columns=["bin", "pct"])
-
-    binned = pd.cut(s, bins=edges, labels=labels, include_lowest=True, right=False)
-    pct_df = value_counts_pct(binned).rename(columns={"category": "bin"})
-    return pct_df
 
 
 def normalize_region_label(x):
@@ -660,10 +611,12 @@ def normalize_yes_no(series: pd.Series) -> pd.Series:
         "1.0": "Yes",
         "true": "Yes",
         "yes": "Yes",
+        "y": "Yes",
         "0": "No",
         "0.0": "No",
         "false": "No",
         "no": "No",
+        "n": "No",
     }
     mapped = lower.map(mapping)
     return mapped.where(mapped.notna(), series.astype(str))
@@ -707,7 +660,7 @@ def main():
         unsafe_allow_html=True,
     )
 
-    # ---- Welcome paragraph ----
+    # ---- Welcome paragraph (Tai text) ----
     st.markdown(
         """
 <div class="chart-container" style="margin-top:0;">
@@ -754,7 +707,7 @@ def main():
     if df.empty:
         st.stop()
 
-    # ---- Column names ----
+    # ---- Column names we care about ----
     COL_REGION = "Please select the region where your company is headquartered."
     COL_INDUSTRY = "What industry sector does your company operate in?"
     COL_REVENUE = "What is your company’s estimated annual revenue?"
@@ -764,6 +717,7 @@ def main():
     COL_SALES_CYCLE = "How does your partner-led sales cycle compare to your direct sales cycle?"
     COL_WIN_RATE = "What’s your win rate for deals where partners are involved?"
 
+    # Derived / found columns
     COL_PRIMARY_GOAL = find_col(df, substrings=["main goal for partnerships in the next 12 months"])
     COL_EXEC_EXPECT = find_col(df, substrings=["executive team’s expectations of partnerships"])
     COL_EXPECTED_REV = find_col(df, substrings=["expected to come from partnerships in the next 12 months"])
@@ -781,6 +735,7 @@ def main():
     COL_STRATEGIC_BET = find_col(df, substrings=["Strategic bet", "strategic bet next 12 months"])
     COL_FORECAST_PERF = find_col(df, substrings=["Forecasted performance", "forecasted performance"])
 
+    # Normalized region
     if COL_REGION in df.columns:
         df = df.copy()
         df["RegionStd"] = df[COL_REGION].map(normalize_region_label)
@@ -857,20 +812,107 @@ def main():
         unsafe_allow_html=True,
     )
 
-    # ---- Tabs ----
-    tab_perf, tab_demo, tab_strategy, tab_portfolio, tab_ops, tab_team, tab_tech, tab_market, tab_impact = st.tabs(
+    # Track which columns we explicitly chart so "Additional Insights" can use the rest
+    used_cols = set(
         [
-            "Performance",
+            COL_REGION,
+            COL_INDUSTRY,
+            COL_REVENUE,
+            COL_EMPLOYEES,
+            COL_DEAL_SIZE,
+            COL_CAC,
+            COL_SALES_CYCLE,
+            COL_WIN_RATE,
+            COL_PRIMARY_GOAL,
+            COL_EXEC_EXPECT,
+            COL_EXPECTED_REV,
+            COL_RETENTION,
+            COL_MOST_IMPACTFUL_TYPE,
+            COL_BIGGEST_CHALLENGE,
+            COL_MISS_GOALS_REASON,
+            COL_TEAM_SIZE,
+            COL_BUDGET,
+            COL_USE_TECH,
+            COL_USE_AI,
+            COL_MARKETPLACE_LISTED,
+            COL_MARKETPLACE_REV,
+            COL_PARTNER_FOCUS,
+            COL_STRATEGIC_BET,
+            COL_FORECAST_PERF,
+            "RegionStd",
+        ]
+    )
+    used_cols = {c for c in used_cols if c is not None}
+
+    # ---- Tabs ----
+    tab_firmo, tab_perf, tab_strategy, tab_portfolio, tab_ops, tab_team, tab_tech, tab_market, tab_extra = st.tabs(
+        [
             "Firmographics",
+            "Performance",
             "Strategic Direction",
-            "Portfolio",
-            "Operational Challenges",
+            "Partnership Portfolio",
+            "Challenges & Risks",
             "Team & Investment",
             "Technology & AI",
             "Marketplaces",
-            "Partner Impact",
+            "Additional Insights",
         ]
     )
+
+    # ======================================================
+    # FIRMOGRAPHICS
+    # ======================================================
+    with tab_firmo:
+        create_section_header("Company profile")
+
+        # Region donut
+        reg_has = "RegionStd" in flt.columns and not flt["RegionStd"].dropna().empty
+
+        def reg_chart():
+            reg_pct = value_counts_pct(flt["RegionStd"])
+            donut_chart_clean(reg_pct, "category", "pct", "HQ region")
+
+        # Revenue donut
+        rev_has = COL_REVENUE in flt.columns and not flt[COL_REVENUE].dropna().empty
+
+        def rev_chart():
+            rev_pct = value_counts_pct(flt[COL_REVENUE])
+            order = [
+                "Less than $50 million",
+                "$50M – $250M",
+                "$250M – $1B",
+                "$1B – $10B",
+                "More than $10B",
+            ]
+            rev_pct["category"] = pd.Categorical(rev_pct["category"], categories=order, ordered=True)
+            rev_pct_sorted = rev_pct.sort_values("category")
+            donut_chart_clean(rev_pct_sorted, "category", "pct", "Company annual revenue")
+
+        two_up_or_full(reg_has, reg_chart, rev_has, rev_chart)
+
+        # Employee donut
+        emp_has = COL_EMPLOYEES in flt.columns and not flt[COL_EMPLOYEES].dropna().empty
+
+        def emp_chart():
+            emp_pct = value_counts_pct(flt[COL_EMPLOYEES])
+            emp_order = [
+                "Less than 100 employees",
+                "100 – 500 employees",
+                "501 – 5,000 employees",
+                "More than 5,000 employees",
+            ]
+            emp_pct["category"] = pd.Categorical(emp_pct["category"], categories=emp_order, ordered=True)
+            emp_pct_sorted = emp_pct.sort_values("category")
+            donut_chart_clean(emp_pct_sorted, "category", "pct", "Total employee count")
+
+        # Industry donut
+        ind_has = COL_INDUSTRY in flt.columns and not flt[COL_INDUSTRY].dropna().empty
+
+        def ind_chart():
+            ind_pct = value_counts_pct(flt[COL_INDUSTRY])
+            donut_chart_clean(ind_pct, "category", "pct", "Industry sector")
+
+        two_up_or_full(emp_has, emp_chart, ind_has, ind_chart)
 
     # ======================================================
     # PERFORMANCE
@@ -903,7 +945,6 @@ def main():
         wr_has = COL_WIN_RATE in flt.columns and not flt[COL_WIN_RATE].dropna().empty
 
         def wr_chart():
-            # Fixed 4 buckets: 0–25, 26–50, 51–75, 76–100
             edges = [0, 25, 50, 75, 101]
             labels = ["0–25%", "26–50%", "51–75%", "76–100%"]
             pct_df = binned_pct_custom(flt[COL_WIN_RATE], edges, labels)
@@ -915,7 +956,7 @@ def main():
                 "pct",
                 "Win rate on partner-involved deals",
                 horizontal=False,
-                max_categories=4,
+                max_categories=TOP_N_DEFAULT,
                 min_pct=0.0,
             )
             st.markdown(
@@ -936,10 +977,6 @@ def main():
                 labels = ["0–50%", "51–75%", "76–95%", "96–100%", "More than 100%"]
                 pct_df = binned_pct_custom(flt[COL_RETENTION], edges, labels)
                 if pct_df.empty:
-                    pct_df = value_counts_pct(flt[COL_RETENTION].astype(str)).rename(
-                        columns={"category": "bin"}
-                    )
-                if pct_df.empty:
                     return
                 bar_chart_from_pct(
                     pct_df,
@@ -958,61 +995,6 @@ def main():
                 )
 
             render_container_if(ret_has, ret_chart)
-
-    # ======================================================
-    # FIRMOGRAPHICS (MORE DONUTS)
-    # ======================================================
-    with tab_demo:
-        create_section_header("Company profile")
-
-        # Region donut
-        reg_has = "RegionStd" in flt.columns and not flt["RegionStd"].dropna().empty
-
-        def reg_chart():
-            reg_pct = value_counts_pct(flt["RegionStd"])
-            donut_chart_with_labels(reg_pct, "category", "pct", "HQ location (region)")
-
-        # Revenue donut
-        rev_has = COL_REVENUE in flt.columns and not flt[COL_REVENUE].dropna().empty
-
-        def rev_chart():
-            rev_pct = value_counts_pct(flt[COL_REVENUE])
-            order = [
-                "Less than $50 million",
-                "$50M – $250M",
-                "$250M – $1B",
-                "$1B – $10B",
-                "More than $10B",
-            ]
-            rev_pct["category"] = pd.Categorical(rev_pct["category"], categories=order, ordered=True)
-            rev_pct_sorted = rev_pct.sort_values("category")
-            donut_chart_with_labels(rev_pct_sorted, "category", "pct", "Company annual revenue")
-
-        two_up_or_full(reg_has, reg_chart, rev_has, rev_chart)
-
-        # Employee count donut
-        emp_has = COL_EMPLOYEES in flt.columns and not flt[COL_EMPLOYEES].dropna().empty
-
-        def emp_chart():
-            emp_pct = value_counts_pct(flt[COL_EMPLOYEES])
-            emp_order = [
-                "Less than 100 employees",
-                "100 – 500 employees",
-                "501 – 5,000 employees",
-                "More than 5,000 employees",
-            ]
-            emp_pct["category"] = pd.Categorical(emp_pct["category"], categories=emp_order, ordered=True)
-            emp_pct_sorted = emp_pct.sort_values("category")
-            donut_chart_with_labels(emp_pct_sorted, "category", "pct", "Total employee count")
-
-        # Industry donut
-        ind_has = COL_INDUSTRY in flt.columns and not flt[COL_INDUSTRY].dropna().empty
-
-        def ind_chart():
-            ind_pct = value_counts_pct(flt[COL_INDUSTRY])
-            donut_chart_with_labels(ind_pct, "category", "pct", "Company industry")
-
-        two_up_or_full(emp_has, emp_chart, ind_has, ind_chart)
 
     # ======================================================
     # STRATEGIC DIRECTION
@@ -1047,9 +1029,7 @@ def main():
                 labels = ["Less than 50%", "50–75%", "75–100%", "More than 100%"]
                 pct_df = binned_pct_custom(flt[COL_EXPECTED_REV], edges, labels)
                 if pct_df.empty:
-                    pct_df = value_counts_pct(flt[COL_EXPECTED_REV].astype(str)).rename(
-                        columns={"category": "bin"}
-                    )
+                    return
                 bar_chart_from_pct(
                     pct_df,
                     "bin",
@@ -1062,7 +1042,7 @@ def main():
 
             render_container_if(er_has, er_chart)
 
-        # Extra strategic charts if present in data
+        # Forward-looking strategy (optional extra)
         create_section_header("Forward-looking strategy (if available)")
 
         if COL_PARTNER_FOCUS and COL_PARTNER_FOCUS in flt.columns:
@@ -1095,38 +1075,40 @@ def main():
 
             render_container_if(sb_has, sb_chart)
 
+        if COL_FORECAST_PERF and COL_FORECAST_PERF in flt.columns:
+            fp_has = not flt[COL_FORECAST_PERF].dropna().empty
+
+            def fp_chart():
+                fp_pct = value_counts_pct(flt[COL_FORECAST_PERF])
+                bar_chart_from_pct(
+                    fp_pct,
+                    "category",
+                    "pct",
+                    "Forecasted performance vs goals",
+                    horizontal=True,
+                )
+
+            render_container_if(fp_has, fp_chart)
+
     # ======================================================
-    # PORTFOLIO
+    # PARTNERSHIP PORTFOLIO
     # ======================================================
     with tab_portfolio:
-        create_section_header("Partnership types currently in use")
-        types_substr = "Which of the following Partnership types does your company have?"
-        types_pct = multi_select_pct(flt, contains_substring=types_substr)
-        types_has = not types_pct.empty
-
-        def types_chart():
-            bar_chart_from_pct(
-                types_pct,
-                "option",
-                "pct",
-                "Partnership types in place today",
-                horizontal=True,
-            )
-
-        render_container_if(types_has, types_chart)
-
         create_section_header("Most impactful partnership type")
         if COL_MOST_IMPACTFUL_TYPE and COL_MOST_IMPACTFUL_TYPE in flt.columns:
             mi_has = not flt[COL_MOST_IMPACTFUL_TYPE].dropna().empty
 
             def mi_chart():
                 mi_pct = value_counts_pct(flt[COL_MOST_IMPACTFUL_TYPE])
-                donut_chart_with_labels(mi_pct, "category", "pct", "Most impactful partnership type")
+                donut_chart_clean(mi_pct, "category", "pct", "Most impactful partnership type")
 
             render_container_if(mi_has, mi_chart)
 
+        # If you have partnership-type multi-select columns in the data, you can still
+        # wire them here later; for now we assume the impact question is the cleanest slice.
+
     # ======================================================
-    # OPS CHALLENGES
+    # OPS CHALLENGES & RISKS
     # ======================================================
     with tab_ops:
         create_section_header("Biggest challenge in scaling the partner program")
@@ -1171,7 +1153,7 @@ def main():
 
             def ts_chart():
                 ts_pct = value_counts_pct(flt[COL_TEAM_SIZE])
-                donut_chart_with_labels(ts_pct, "category", "pct", "Partnerships team size")
+                donut_chart_clean(ts_pct, "category", "pct", "Partnerships team size")
 
             render_container_if(ts_has, ts_chart)
 
@@ -1202,7 +1184,7 @@ def main():
             render_container_if(bud_has, bud_chart)
 
     # ======================================================
-    # TECH & AI
+    # TECHNOLOGY & AI
     # ======================================================
     with tab_tech:
         create_section_header("Use of technology / automation")
@@ -1211,7 +1193,7 @@ def main():
             ut_has = not ut_pct.empty
 
             def ut_chart():
-                donut_chart_with_labels(
+                donut_chart_clean(
                     ut_pct,
                     "category",
                     "pct",
@@ -1226,37 +1208,40 @@ def main():
             ai_has = not ai_pct.empty
 
             def ai_chart():
-                donut_chart_with_labels(
+                donut_chart_clean(
                     ai_pct,
                     "category",
                     "pct",
-                    "Currently using AI",
-                    exclude_label_categories=["Not sure"],
+                    "Currently using AI in the partner organization",
                 )
 
             render_container_if(ai_has, ai_chart)
 
-        create_section_header("Common tools used to manage partnerships (multi-select)")
+        create_section_header("Common tools used to manage partnerships (if present)")
         tools_substr = "What tools do you currently use to manage your partnerships?"
-        tools_pct = multi_select_pct(flt, contains_substring=tools_substr)
-        tools_has = not tools_pct.empty
+        tools_col = find_col(df, substrings=[tools_substr])
+        if tools_col and tools_col in flt.columns:
+            # If this is single-select, treat as a simple bar; if multi-select you can adapt later.
+            tools_series = flt[tools_col]
+            tools_pct = value_counts_pct(tools_series)
+            tools_has = not tools_pct.empty
 
-        def tools_chart():
-            bar_chart_from_pct(
-                tools_pct,
-                "option",
-                "pct",
-                "Tools used to manage partnerships (categories)",
-                horizontal=True,
-            )
-            st.markdown(
-                '<div class="chart-caption">'
-                "Tool names are shown as generic categories only."
-                "</div>",
-                unsafe_allow_html=True,
-            )
+            def tools_chart():
+                bar_chart_from_pct(
+                    tools_pct,
+                    "category",
+                    "pct",
+                    "Tools used to manage partnerships (categories)",
+                    horizontal=True,
+                )
+                st.markdown(
+                    '<div class="chart-caption">'
+                    "Tool names are shown as generic categories only."
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
 
-        render_container_if(tools_has, tools_chart)
+            render_container_if(tools_has, tools_chart)
 
     # ======================================================
     # MARKETPLACES
@@ -1270,7 +1255,7 @@ def main():
             mpl_has = not mpl_pct.empty
 
             def mpl_chart():
-                donut_chart_with_labels(
+                donut_chart_clean(
                     mpl_pct,
                     "category",
                     "pct",
@@ -1285,7 +1270,6 @@ def main():
             mp_has = not mp_rev.empty
 
             def mp_chart():
-                # Fixed buckets: <5, 5–15, 15–30, 30–50, >50
                 edges = [0, 5, 15, 30, 50, 101]
                 labels = [
                     "Less than 5%",
@@ -1297,7 +1281,7 @@ def main():
                 mp_num = pd.to_numeric(mp_rev, errors="coerce").dropna()
                 pct_df = binned_pct_custom(mp_num, edges, labels)
                 if pct_df.empty:
-                    pct_df = value_counts_pct(mp_rev.astype(str)).rename(columns={"category": "bin"})
+                    return
                 bar_chart_from_pct(
                     pct_df,
                     "bin",
@@ -1317,42 +1301,116 @@ def main():
             render_container_if(mp_has, mp_chart)
 
     # ======================================================
-    # PARTNER IMPACT
+    # ADDITIONAL INSIGHTS – AUTO-GENERATED CHARTS
     # ======================================================
-    with tab_impact:
-        create_section_header("Partner influence and ecosystem impact")
-        influence_substr = (
-            "Besides Sourced Revenue, how else does your company measure partner influence impact?"
-        )
-        infl_pct = multi_select_pct(flt, contains_substring=influence_substr)
-        infl_has = not infl_pct.empty
+    with tab_extra:
+        create_section_header("Additional insights across remaining questions")
 
-        def infl_chart():
-            bar_chart_from_pct(
-                infl_pct,
-                "option",
-                "pct",
-                "Partner influence measurement methods",
-                horizontal=True,
-            )
+        # Heuristic: skip typical Qualtrics metadata
+        skip_substrings = [
+            "StartDate",
+            "EndDate",
+            "Status",
+            "IPAddress",
+            "Progress",
+            "Duration",
+            "Finished",
+            "RecordedDate",
+            "ResponseId",
+            "Recipient",
+            "LocationLatitude",
+            "LocationLongitude",
+            "UserLanguage",
+        ]
 
-        render_container_if(infl_has, infl_chart)
+        extra_cat_cols = []
+        extra_num_cols = []
 
-        create_section_header("Partnership ecosystem (types)")
-        types_substr = "Which of the following Partnership types does your company have?"
-        types_pct2 = multi_select_pct(flt, contains_substring=types_substr)
-        types_has2 = not types_pct2.empty
+        for col in flt.columns:
+            if col in used_cols:
+                continue
+            if any(sub in col for sub in skip_substrings):
+                continue
+            if col == "RegionStd":
+                continue
 
-        def types2_chart():
-            bar_chart_from_pct(
-                types_pct2,
-                "option",
-                "pct",
-                "Partnership types in place today",
-                horizontal=True,
-            )
+            series = flt[col]
+            s_nonnull = series.dropna()
+            if s_nonnull.empty:
+                continue
 
-        render_container_if(types_has2, types2_chart)
+            # Try numeric % questions (0-100)
+            numeric_coerced = pd.to_numeric(s_nonnull, errors="coerce")
+            fraction_numeric = numeric_coerced.notna().mean()
+
+            if fraction_numeric > 0.9:
+                # numeric
+                min_val = numeric_coerced.min()
+                max_val = numeric_coerced.max()
+                if 0 <= min_val <= 100 and 0 <= max_val <= 100:
+                    extra_num_cols.append(col)
+                else:
+                    # ignore non-percentage numeric in this auto section
+                    pass
+            else:
+                # categorical
+                n_unique = s_nonnull.astype(str).nunique()
+                if 1 < n_unique <= 12:
+                    extra_cat_cols.append(col)
+                else:
+                    # skip free-text / very high cardinality
+                    pass
+
+        # Categorical charts
+        for col in extra_cat_cols:
+            col_title = col
+            cat_pct = value_counts_pct(flt[col])
+            has = not cat_pct.empty
+
+            def make_cat_chart(col_name=col, pct_df=cat_pct, title=col_title):
+                bar_chart_from_pct(
+                    pct_df,
+                    "category",
+                    "pct",
+                    title,
+                    horizontal=True,
+                    max_categories=TOP_N_DEFAULT,
+                    min_pct=None,
+                )
+
+            render_container_if(has, make_cat_chart)
+
+        # Numeric percentage distributions
+        if extra_num_cols:
+            create_section_header("Additional % distributions")
+        for col in extra_num_cols:
+            s = pd.to_numeric(flt[col], errors="coerce").dropna()
+            if s.empty:
+                continue
+
+            edges = [0, 25, 50, 75, 101]
+            labels = ["0–25%", "26–50%", "51–75%", "76–100%"]
+            pct_df = binned_pct_custom(s, edges, labels)
+            if pct_df.empty:
+                continue
+
+            col_title = col
+
+            def make_num_chart(pct_df=pct_df, title=col_title):
+                bar_chart_from_pct(
+                    pct_df,
+                    "bin",
+                    "pct",
+                    title,
+                    horizontal=False,
+                    max_categories=TOP_N_DEFAULT,
+                    min_pct=0.0,
+                )
+
+            render_container_if(True, make_num_chart)
+
+        if not extra_cat_cols and not extra_num_cols:
+            st.info("No additional summarized questions detected beyond the main dashboard sections.")
 
     # ---- Footer ----
     st.markdown(
