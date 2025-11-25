@@ -1,8 +1,9 @@
 import altair as alt
 import pandas as pd
-import pydeck as pdk  # kept in case you want maps later
+import pydeck as pdk
 import streamlit as st
 import streamlit.components.v1 as components
+import re
 
 # ==================== PAGE CONFIG ====================
 st.set_page_config(
@@ -37,7 +38,7 @@ PL_COLORS = [
     PL_TINTS["cerulean_light"],
 ]
 
-TOP_N_DEFAULT = 4  # Show top 4 categories everywhere
+TOP_N_DEFAULT = 4  # default max categories per chart
 
 
 # ==================== ENHANCED CSS / LIGHT THEME ====================
@@ -248,7 +249,7 @@ main.block-container {
         grid-template-columns: 1fr;
     }
 }
-/* Remove empty rectangles above charts */
+/* Kill empty rectangles */
 .chart-container:empty {
     display: none !important;
     padding: 0 !important;
@@ -363,7 +364,7 @@ def create_section_header(title: str):
 
 
 def donut_chart_clean(df_pct: pd.DataFrame, cat_field: str, pct_field: str, title: str):
-    """Donut chart without value overlays; legend + tooltip only."""
+    """Donut chart without % overlays."""
     if df_pct.empty:
         return
     data = df_pct.copy().rename(columns={pct_field: "Percent"})
@@ -396,14 +397,11 @@ def bar_chart_from_pct(
     pct_field: str,
     title: str,
     horizontal: bool = True,
-    max_categories: int = TOP_N_DEFAULT,
+    max_categories: int | None = TOP_N_DEFAULT,
     min_pct: float | None = None,
 ):
     """
-    Branded bar chart:
-    - Top N only (sorted descending)
-    - Multi-colored bars using PL palette
-    - % labels on bars
+    Branded bar chart with multi-color bars and % labels.
     """
     if df_pct.empty:
         return
@@ -582,6 +580,39 @@ def two_up_or_full(left_has: bool, left_fn, right_has: bool, right_fn):
         render_container_if(True, right_fn)
 
 
+def clean_question_title(col_name: str) -> str:
+    """Remove _Column2 etc and stray underscores in question labels."""
+    title = re.sub(r"_Column\\d+", "", col_name)
+    title = title.replace("_", " ")
+    title = re.sub(r"\\s+", " ", title).strip()
+    return title
+
+
+def extract_platform_tool(col_name: str) -> str | None:
+    """
+    For columns like:
+    'Which platforms do you plan to use more, less, or steady? _Amplify_Column2'
+    return 'Amplify'.
+    """
+    if "Which platforms do you plan to use more, less, or steady?" not in col_name:
+        return None
+    # Split at '?'
+    parts = col_name.split("?", 1)
+    if len(parts) != 2:
+        return None
+    tail = parts[1]
+    # Remove Column suffix
+    tail = re.sub(r"_Column\\d+", "", tail)
+    # Strip underscores and spaces
+    tail = tail.strip(" _-")
+    if not tail:
+        return None
+    # Clean remaining underscores/brackets
+    tail = tail.replace("_", " ")
+    tail = re.sub(r"\\s+", " ", tail)
+    return tail.strip()
+
+
 # ==================== MAIN APP ====================
 def main():
     st.markdown('<div class="app-wrapper">', unsafe_allow_html=True)
@@ -599,7 +630,7 @@ def main():
         unsafe_allow_html=True,
     )
 
-    # ---- Welcome text (Tai’s copy) ----
+    # ---- Welcome text (Tai copy) ----
     st.markdown(
         """
 <div class="chart-container" style="margin-top:0;">
@@ -728,7 +759,7 @@ def main():
     if selected_employees:
         flt = flt[flt[COL_EMPLOYEES].isin(selected_employees)]
 
-    # ---- About section (persistent) ----
+    # ---- About section ----
     create_section_header("About this dashboard and dataset")
     st.markdown(
         """
@@ -750,9 +781,10 @@ def main():
         unsafe_allow_html=True,
     )
 
-    # Columns already used explicitly
-    used_cols = set(
-        [
+    # Columns already wired to specific visuals
+    used_cols = {
+        c
+        for c in [
             COL_REGION,
             COL_INDUSTRY,
             COL_REVENUE,
@@ -779,8 +811,8 @@ def main():
             COL_FORECAST_PERF,
             "RegionStd",
         ]
-    )
-    used_cols = {c for c in used_cols if c is not None}
+        if c is not None
+    }
 
     # ---- Tabs ----
     tab_firmo, tab_perf, tab_strategy, tab_portfolio, tab_ops, tab_team, tab_tech, tab_market, tab_extra = st.tabs(
@@ -973,7 +1005,7 @@ def main():
 
             render_container_if(er_has, er_chart)
 
-        create_section_header("Forward-looking strategy (if available)")
+        create_section_header("Forward-looking strategy")
 
         if COL_PARTNER_FOCUS and COL_PARTNER_FOCUS in flt.columns:
             pf_has = not flt[COL_PARTNER_FOCUS].dropna().empty
@@ -1196,7 +1228,6 @@ def main():
             mp_has_any = not mp_rev.empty
 
             def mp_chart():
-                # Try numeric first; if it fails, treat as categorical buckets
                 mp_num = pd.to_numeric(mp_rev, errors="coerce")
                 if mp_num.notna().sum() > 0 and mp_num.notna().mean() > 0.7:
                     edges = [0, 5, 15, 30, 50, 101]
@@ -1262,6 +1293,9 @@ def main():
             "_Close Rates",
             "close rate",
             "close rates",
+            "Other – please specify",
+            "Other - please specify",
+            "additional feedback or comments you'd like to share",
         ]
 
         vendor_keywords = [
@@ -1281,7 +1315,7 @@ def main():
             "workday",
         ]
 
-        extra_cat_cols = []
+        extra_questions: list[dict] = []
 
         for col in flt.columns:
             if col in used_cols:
@@ -1296,47 +1330,64 @@ def main():
             if s_nonnull.empty:
                 continue
 
-            # treat only categorical (we are dropping the numeric % distributions here)
+            # skip numeric-only derived % metrics
             numeric_coerced = pd.to_numeric(s_nonnull, errors="coerce")
-            fraction_numeric = numeric_coerced.notna().mean()
-            if fraction_numeric > 0.9:
-                # skip numeric metrics to avoid weird 100% distributions
+            if numeric_coerced.notna().mean() > 0.9:
                 continue
 
+            # skip questions with too many categories
             n_unique = s_nonnull.astype(str).nunique()
             if n_unique <= 1 or n_unique > 12:
                 continue
 
-            # Skip questions where values contain vendor names
             lower_vals = s_nonnull.astype(str).str.lower()
-            has_vendor = False
-            for kw in vendor_keywords:
-                if lower_vals.str.contains(kw, na=False).any():
-                    has_vendor = True
-                    break
-            if has_vendor:
+            if any(lower_vals.str.contains(kw, na=False).any() for kw in vendor_keywords):
                 continue
 
-            extra_cat_cols.append(col)
+            cat_pct = value_counts_pct(series)
+            if cat_pct.empty:
+                continue
 
-        for col in extra_cat_cols:
-            col_title = col
-            cat_pct = value_counts_pct(flt[col])
-            has_data = not cat_pct.empty
+            extra_questions.append({"col": col, "pct": cat_pct})
 
-            def make_cat_chart(col_name=col, pct_df=cat_pct, title=col_title):
-                bar_chart_from_pct(
-                    pct_df,
-                    "category",
-                    "pct",
-                    title,
-                    horizontal=True,
-                    max_categories=TOP_N_DEFAULT,
-                )
+        # limit to first 10 to avoid long scrolling
+        extra_questions = extra_questions[:10]
 
-            render_container_if(has_data, make_cat_chart)
+        for item in extra_questions:
+            col = item["col"]
+            pct_df = item["pct"]
+            n_cat = len(pct_df)
 
-        if not extra_cat_cols:
+            tool_name = extract_platform_tool(col)
+            if tool_name:
+                title = f"{tool_name} – Which platforms do you plan to use more, less, or steady?"
+            else:
+                title = clean_question_title(col)
+
+            def make_chart(pct_df=pct_df, title=title, tool_name=tool_name, n_cat=n_cat):
+                # mix donut vs bar depending on categories
+                if n_cat <= 5:
+                    donut_chart_clean(pct_df, "category", "pct", title)
+                else:
+                    bar_chart_from_pct(
+                        pct_df,
+                        "category",
+                        "pct",
+                        title,
+                        horizontal=True,
+                        max_categories=min(n_cat, TOP_N_DEFAULT),
+                    )
+                if tool_name:
+                    st.markdown(
+                        f"<div style='text-align:center;font-weight:600;margin-top:-6px;'>"
+                        f"{tool_name}"
+                        f"</div>",
+                        unsafe_allow_html=True,
+                    )
+
+            render_container_if(True, make_chart)
+
+        if not extra_questions:
             st.info("No additional summarized categorical questions detected beyond the main dashboard sections.")
 
     # ---- Footer ----
