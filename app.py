@@ -692,8 +692,19 @@ def main():
     # ---- Column names ----
     COL_REGION = "Please select the region where your company is headquartered."
     COL_INDUSTRY = "What industry sector does your company operate in?"
-    COL_REVENUE = "What is your companys estimated annual revenue?"  # note: single straight apostrophe replaced with plain s
-    COL_EMPLOYEES = "What is your companys total number of employees?"  # same apostrophe
+    # Attempt to find the revenue and employee columns using flexible matching so that minor punctuation
+    # differences (e.g., curly apostrophes) won't prevent the filters from appearing. The `find_col`
+    # helper returns the first matching column if found.
+    COL_REVENUE = find_col(
+        df,
+        exact="What is your companys estimated annual revenue?",
+        substrings=["estimated annual revenue", "annual revenue", "company's estimated annual revenue", "company’s estimated annual revenue"],
+    )
+    COL_EMPLOYEES = find_col(
+        df,
+        exact="What is your companys total number of employees?",
+        substrings=["total number of employees", "total employees"],
+    )
     COL_DEAL_SIZE = "How does your average deal size involving partners compare to direct or non-partner deals?"
     COL_CAC = "How does your customer acquisition cost (CAC) from partners compared to direct sales and marketing?"
     COL_SALES_CYCLE = "How does your partner-led sales cycle compare to your direct sales cycle?"
