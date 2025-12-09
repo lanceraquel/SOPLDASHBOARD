@@ -1192,38 +1192,37 @@ def main():
         # use the first match for that type
                 col_map[short_label] = matches[0]
 
-            if col_map:
-                respondents_mask = flt[list(col_map.values())].apply(lambda row: row.notna().any(), axis=1)
-                respondents_part = respondents_mask.sum()
+        if col_map:
+            respondents_mask = flt[list(col_map.values())].apply(lambda row: row.notna().any(), axis=1)
+            respondents_part = respondents_mask.sum()
 
-                counts = {}
-                for short_label, col in col_map.items():
-                    s = pd.to_numeric(flt[col], errors="coerce")
-                    counts[short_label] = s.sum(skipna=True)
+            counts = {}
+            for short_label, col in col_map.items():
+                s = pd.to_numeric(flt[col], errors="coerce")
+                counts[short_label] = s.sum(skipna=True)
 
-                if respondents_part > 0:
-                    df_part = pd.DataFrame(
-                        {
-                            "category": list(counts.keys()),   # already in the order of ptype_patterns
-                            "count": list(counts.values()),
-                        }
-                    )
+            if respondents_part > 0:
+                df_part = pd.DataFrame(
+                    {
+                        "category": list(counts.keys()),   # already in the order of ptype_patterns
+                        "count": list(counts.values()),
+                    }
+                )
         # % of respondents who have each partnership type
-                    df_part["pct"] = (df_part["count"] / respondents_part) * 100.0
+                df_part["pct"] = (df_part["count"] / respondents_part) * 100.0
 
-                    def part_chart():
-                        bar_chart_from_pct(
-                        df_part,
-                        "category",
-                        "pct",
-                        "Current partnership types",
-                        horizontal=True,
-                        max_categories=10,
-                        sort_by_pct=False,  # preserve our forced order
-                    )
+                def part_chart():
+                    bar_chart_from_pct(
+                    df_part,
+                    "category",
+                    "pct",
+                    "Current partnership types",
+                    horizontal=True,
+                    max_categories=10,
+                    sort_by_pct=False,  # preserve our forced order
+                )
 
-                render_container_if(True, part_chart)
-
+            render_container_if(True, part_chart)
 
         # New: Partnership types you plan to expand into (multi-select counts)
         create_section_header("Partnership types you plan to expand into")
