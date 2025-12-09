@@ -1214,6 +1214,13 @@ def main():
                 )
         # % of respondents who have each partnership type
                 df_part["pct"] = (df_part["count"] / respondents_part) * 100.0
+                
+                df_part["category"] = pd.Categorical(
+                    df_part["category"],
+                    categories=ordered_labels,
+                    ordered=True,
+                )
+                df_part = df_part.sort_values("category")
 
                 def part_chart():
                     bar_chart_from_pct(
@@ -1223,7 +1230,6 @@ def main():
                         "Current partnership types",
                         horizontal=True,
                         max_categories=10,
-                        sort_by_pct=False,  # preserve our forced order
                     )
 
                 render_container_if(True, part_chart)
