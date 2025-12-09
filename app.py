@@ -1062,29 +1062,13 @@ def main():
 
             render_container_if(pg_has, pg_chart)
 
-
         create_section_header("Executive expectations of partnerships")
         if COL_EXEC_EXPECT and COL_EXEC_EXPECT in flt.columns:
             ex_has = not flt[COL_EXEC_EXPECT].dropna().empty
 
             def ex_chart():
-                series = flt[COL_EXEC_EXPECT].dropna().astype(str)
-                series_norm = series.str.replace(" – ", " - ", regex=False)
-                short_labels = series_norm.str.split(" - ", n=1).str[0].str.strip()
-
-                ex_pct = value_counts_pct(short_labels)
-
-                order = ["Transactional", "Strategic", "Integrated", "Nascent"]
-                ex_pct["category"] = pd.Categorical(ex_pct["category"], categories=order, ordered=True)
-                ex_pct = ex_pct.sort_values("category")
-
-                bar_chart_from_pct(
-                    ex_pct,
-                    "category",
-                    "pct",
-                    "Executive expectations",
-                    horizontal=True,
-                )
+                ex_pct = value_counts_pct(flt[COL_EXEC_EXPECT])
+                bar_chart_from_pct(ex_pct, "category", "pct", "Executive expectations", horizontal=True)
 
             render_container_if(ex_has, ex_chart)
 
@@ -1170,55 +1154,30 @@ def main():
 
             render_container_if(mi_has, mi_chart)
 
-
-# ------------------------------------------------------------------
-# Current partnership types (multi-select, short labels only)
-# ------------------------------------------------------------------
-        create_section_header("Current partnership types")
-
-# Map SHORT label → unique substring that appears in the column name
-        ptype_patterns = {
-            "Solution Partnerships": "Solution Partnerships",
-            "Channel Partnerships": "Channel Partnerships",
-            "Product Partnerships": "Product Partnerships",
-            "Affiliate Partnerships": "Affiliate Partnerships",
-            "Marketplace Partnerships": "Marketplace Partnerships",
-        }
-
-# All partnership-type columns in the dataset
-        part_cols_all = [
-            c
-            for c in flt.columns
-            if "Which of the following Partnership types does your company have?" in c
-        ]
-
-        if part_cols_all:
-        # Build mapping from short label to actual column name
-        col_map = {}
-        for short_label, needle in ptype_patterns.items():
-            for c in part_cols_all:
-                if needle in c:
-                    col_map[short_label] = c
-                    break
-
-        if col_map:
-            cols_used = list(col_map.values())
-
-        # Denominator: respondents who answered at least one of these options
-            respondents_mask = flt[cols_used].apply(lambda row: row.notna().any(), axis=1)
-            respondents_part = respondents_mask.sum()
-
-            if respondents_part > 0:
-                rows = []
-            # Go through patterns in the order we want the bars to appear
-                for short_label in ptype_patterns.keys():
-                    if short_label in col_map:
-                        s = pd.to_numeric(flt[col_map[short_label]], errors="coerce")
-                        count = s.sum(skipna=True)
-                        rows.append((short_label, count))
-
-                df_part = pd.DataFrame(rows, columns=["category", "count"])
-                df_part["pct"] = (df_part["count"] / respondents_part) * 100.0
+        # New: Partnership types your company currently has (multi-select counts)
+        create_section_header("Partnership types your company has")
+        part_cols = [c for c in flt.columns if "Which of the following Partnership types does your company have?" in c]
+        if part_cols:
+            counts = {}
+            for col in part_cols:
+                # convert to numeric 1/0 for selected/unselected
+                s = pd.to_numeric(flt[col], errors="coerce")
+                total_selected = s.sum(skipna=True)
+                if total_selected > 0:
+                    # take the label after the underscore
+                    label = col.split("_")[-1]
+                    counts[label] = total_selected
+            if counts:
+                df_part = (
+                    pd.DataFrame.from_dict(counts, orient="index", columns=["count"])
+                    .reset_index()
+                    .rename(columns={"index": "category"})
+                )
+                # compute percentage relative to number of responses after filtering
+                if len(flt) > 0:
+                    df_part["pct"] = (df_part["count"] / len(flt)) * 100
+                else:
+                    df_part["pct"] = 0
 
                 def part_chart():
                     bar_chart_from_pct(
@@ -1231,7 +1190,6 @@ def main():
                     )
 
                 render_container_if(True, part_chart)
-
 
         # New: Partnership types you plan to expand into (multi-select counts)
         create_section_header("Partnership types you plan to expand into")
