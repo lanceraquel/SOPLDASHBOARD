@@ -1188,6 +1188,7 @@ def main():
         col_map = {}
         for short_label, needle in ptype_patterns.items():
             matches = [c for c in flt.columns if "Which of the following Partnership types does your company have?" in c and needle in c]
+            
             if matches:
         # use the first match for that type
                 col_map[short_label] = matches[0]
@@ -1213,16 +1214,16 @@ def main():
 
                 def part_chart():
                     bar_chart_from_pct(
-                    df_part,
-                    "category",
-                    "pct",
-                    "Current partnership types",
-                    horizontal=True,
-                    max_categories=10,
-                    sort_by_pct=False,  # preserve our forced order
-                )
+                        df_part,
+                        "category",
+                        "pct",
+                        "Current partnership types",
+                        horizontal=True,
+                        max_categories=10,
+                        sort_by_pct=False,  # preserve our forced order
+                    )
 
-            render_container_if(True, part_chart)
+                render_container_if(True, part_chart)
 
         # New: Partnership types you plan to expand into (multi-select counts)
         create_section_header("Partnership types you plan to expand into")
