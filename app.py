@@ -1172,10 +1172,11 @@ def main():
 
 
 # ------------------------------------------------------------------
-# Current partnership types (multi-select, forced labels)
+# Current partnership types (multi-select, short labels only)
 # ------------------------------------------------------------------
         create_section_header("Current partnership types")
 
+# Map SHORT label → unique substring that appears in the column name
         ptype_patterns = {
             "Solution Partnerships": "Solution Partnerships",
             "Channel Partnerships": "Channel Partnerships",
@@ -1184,43 +1185,40 @@ def main():
             "Marketplace Partnerships": "Marketplace Partnerships",
         }
 
+# All partnership-type columns in the dataset
+        part_cols_all = [
+            c
+            for c in flt.columns
+            if "Which of the following Partnership types does your company have?" in c
+        ]
+
+        if part_cols_all:
+        # Build mapping from short label to actual column name
         col_map = {}
         for short_label, needle in ptype_patterns.items():
-            matches = [
-                c for c in flt.columns 
-                if "Which of the following Partnership types does your company have?" in c 
-                and needle in c
-            ]
-            
-            if matches:
-        # use the first match for that type
-                col_map[short_label] = matches[0]
+            for c in part_cols_all:
+                if needle in c:
+                    col_map[short_label] = c
+                    break
 
         if col_map:
-            respondents_mask = flt[list(col_map.values())].apply(lambda row: row.notna().any(), axis=1)
+            cols_used = list(col_map.values())
+
+        # Denominator: respondents who answered at least one of these options
+            respondents_mask = flt[cols_used].apply(lambda row: row.notna().any(), axis=1)
             respondents_part = respondents_mask.sum()
 
-            counts = {}
-            for short_label, col in col_map.items():
-                s = pd.to_numeric(flt[col], errors="coerce")
-                counts[short_label] = s.sum(skipna=True)
-
             if respondents_part > 0:
-                df_part = pd.DataFrame(
-                    {
-                        "category": list(counts.keys()),   # already in the order of ptype_patterns
-                        "count": list(counts.values()),
-                    }
-                )
-        # % of respondents who have each partnership type
+                rows = []
+            # Go through patterns in the order we want the bars to appear
+                for short_label in ptype_patterns.keys():
+                    if short_label in col_map:
+                        s = pd.to_numeric(flt[col_map[short_label]], errors="coerce")
+                        count = s.sum(skipna=True)
+                        rows.append((short_label, count))
+
+                df_part = pd.DataFrame(rows, columns=["category", "count"])
                 df_part["pct"] = (df_part["count"] / respondents_part) * 100.0
-                
-                df_part["category"] = pd.Categorical(
-                    df_part["category"],
-                    categories=ordered_labels,
-                    ordered=True,
-                )
-                df_part = df_part.sort_values("category")
 
                 def part_chart():
                     bar_chart_from_pct(
@@ -1233,6 +1231,7 @@ def main():
                     )
 
                 render_container_if(True, part_chart)
+
 
         # New: Partnership types you plan to expand into (multi-select counts)
         create_section_header("Partnership types you plan to expand into")
