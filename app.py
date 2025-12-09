@@ -1067,10 +1067,25 @@ def main():
             ex_has = not flt[COL_EXEC_EXPECT].dropna().empty
 
             def ex_chart():
-                ex_pct = value_counts_pct(flt[COL_EXEC_EXPECT])
-                bar_chart_from_pct(ex_pct, "category", "pct", "Executive expectations", horizontal=True)
+        # Take only the label before the dash (Transactional, Strategic, Integrated, Nascent)
+            series = flt[COL_EXEC_EXPECT].dropna().astype(str)
 
-            render_container_if(ex_has, ex_chart)
+        # Normalise en dashes to a regular hyphen and split once
+            series_norm = series.str.replace(" – ", " - ", regex=False)
+            short_labels = series_norm.str.split(" - ", n=1).str[0].str.strip()
+
+        # Compute % using the short labels
+            ex_pct = value_counts_pct(short_labels)
+
+            bar_chart_from_pct(
+                ex_pct,
+                "category",
+                "pct",
+                "Executive expectations",  # chart title stays clean
+                horizontal=True,
+            )
+
+        render_container_if(ex_has, ex_chart)
 
         create_section_header("Expected revenue from partnerships (next 12 months)")
         if COL_EXPECTED_REV and COL_EXPECTED_REV in flt.columns:
