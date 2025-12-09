@@ -1177,11 +1177,11 @@ def main():
         create_section_header("Current partnership types")
 
         ptype_patterns = {
-        "Solution Partnerships": "Solution Partnerships",
-        "Channel Partnerships": "Channel Partnerships",
-        "Product Partnerships": "Product Partnerships",
-        "Affiliate Partnerships": "Affiliate Partnerships",
-        "Marketplace Partnerships": "Marketplace Partnerships",
+            "Solution Partnerships": "Solution Partnerships",
+            "Channel Partnerships": "Channel Partnerships",
+            "Product Partnerships": "Product Partnerships",
+            "Affiliate Partnerships": "Affiliate Partnerships",
+            "Marketplace Partnerships": "Marketplace Partnerships",
         }
 
 
