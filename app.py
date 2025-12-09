@@ -4,8 +4,6 @@ import streamlit as st
 import streamlit.components.v1 as components
 import re
 
-
-
 # ==================== PAGE CONFIG ====================
 st.set_page_config(
     page_title="SOPL 2025 - Partnership Analytics",
@@ -69,6 +67,7 @@ def _ensure_colour_list(n: int) -> list[str]:
     without reusing the same hue too soon.
     """
     colours = PL_COLOURS_BASE.copy()
+
     lighten_step = 0.15
     current_lighten = lighten_step
     while len(colours) < n:
@@ -82,8 +81,9 @@ def _ensure_colour_list(n: int) -> list[str]:
 
 PL_COLOURS_DEFAULT = PL_COLOURS_BASE.copy()
 
-TOP_N_DEFAULT = 4  # default max categories per chart
+TOP_N_DEFAULT = 4 
 
+# ==================== ENHANCED CSS / LIGHT THEME ====================
 st.markdown(
     """
 <style>
@@ -458,9 +458,8 @@ def donut_chart_clean(df_pct: pd.DataFrame, cat_field: str, pct_field: str, titl
     data = df_pct.copy().rename(columns={pct_field: "Percent"})
     data[cat_field] = data[cat_field].astype(str)
     data["PercentLabel"] = data["Percent"].map(lambda v: f"{v:.1f}%")
-    # Determine how many colours are needed and build a palette accordingly
     colour_list = _ensure_colour_list(len(data))
-    # Build the base chart; `stack=True` computes cumulative start/end angles
+
     base = alt.Chart(data).encode(
         theta=alt.Theta("Percent:Q", stack=True),
         color=alt.Color(f"{cat_field}:N", legend=alt.Legend(title=None, orient="right"), scale=alt.Scale(range=colour_list)),
@@ -471,13 +470,13 @@ def donut_chart_clean(df_pct: pd.DataFrame, cat_field: str, pct_field: str, titl
 
     THRESHOLD = 5.0
     text = base.mark_text(
-        radius=alt.Radius("radius:Q"),
         size=13,
         color="#020617",
         fontWeight=600,
         align="center",
     ).encode(
         text=alt.Text("PercentLabel:N"),
+        radius=alt.Radius("radius:Q"),
     ).transform_calculate(
         radius=f"datum.Percent >= {THRESHOLD} ? 80 : 115"
     )
@@ -509,7 +508,7 @@ def bar_chart_from_pct(
         return
     data = df_pct.copy().rename(columns={pct_field: "Percent"})
     data[cat_field] = data[cat_field].astype(str)
-    # Sort by descending percentage
+
     data = data.sort_values("Percent", ascending=False)
     if min_pct is not None:
         data = data[data["Percent"] >= min_pct]
@@ -518,7 +517,6 @@ def bar_chart_from_pct(
     if data.empty:
         return
     data["PercentLabel"] = data["Percent"].map(lambda v: f"{v:.1f}%")
-    # Use enough colours for all categories
     colours = _ensure_colour_list(len(data))
     if horizontal:
         base = alt.Chart(data).encode(
@@ -778,7 +776,7 @@ def main():
     COL_CAC = "How does your customer acquisition cost (CAC) from partners compared to direct sales and marketing?"
     COL_SALES_CYCLE = "How does your partner-led sales cycle compare to your direct sales cycle?"
     COL_WIN_RATE = "What’s your win rate for deals where partners are involved?"  # partner-influenced
-
+    # dynamic column detection for optional fields
     COL_PRIMARY_GOAL = find_col(df, substrings=["main goal for partnerships in the next 12 months"])
     COL_EXEC_EXPECT = find_col(df, substrings=["executive teams expectations of partnerships", "executive team’s expectations of partnerships"])
     COL_EXPECTED_REV = find_col(df, substrings=["expected to come from partnerships in the next 12 months"])
@@ -795,18 +793,18 @@ def main():
     COL_PARTNER_FOCUS = find_col(df, substrings=["focus next 12 months"])
     COL_STRATEGIC_BET = find_col(df, substrings=["Strategic bet", "strategic bet next 12 months"])
     COL_FORECAST_PERF = find_col(df, substrings=["Forecasted performance", "forecasting your performance"])
-
+    # Additional portfolio-related metrics (exact names from dataset)
     COL_TOTAL_PARTNERS = "How many total partners do you have?"
     COL_ACTIVE_PARTNERS = "How many active partners generated revenue in the last 12 months?"
     COL_TIME_TO_REVENUE = "How long does it typically take for a partnership to generate revenue after the first meeting?"
-
+    # Additional fields from updated dataset
     COL_REPORTING = find_col(df, substrings=["report to", "majority of your partner organization report"])
     COL_TOP3_BUDGET_PREFIX = "What are the top 3 budget line items for your Partnerships organization, excluding headcount?"
-
+    # training / enablement
     COL_TRAINING = find_col(df, substrings=["level of training", "training or enablement"])
-
+    # partner satisfaction measurement (multi-select)
     SAT_PREFIX = "How do you measure partner satisfaction?"
-
+    # RegionStd helper
     if COL_REGION in df.columns:
         df = df.copy()
         df["RegionStd"] = df[COL_REGION].map(normalize_region_label)
