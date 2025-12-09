@@ -4,13 +4,14 @@ import streamlit as st
 import streamlit.components.v1 as components
 import re
 
-# ==================== PAGE CONFIG ====================
 st.set_page_config(
     page_title="SOPL 2025 - Partnership Analytics",
     page_icon="PL_transparent_1080.ico",
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+
 PL_CORE = {
     "amaranth": "#EC3D72",
     "casablanca": "#F9A644",
@@ -47,6 +48,7 @@ def _lighten_colour(hex_colour: str, amount: float = 0.3) -> str:
     b = int(b + (255 - b) * amount)
     return f"#{r:02x}{g:02x}{b:02x}"
 
+
 PL_COLOURS_BASE = [
     PL_CORE["minsk"],
     PL_CORE["amaranth"],
@@ -66,6 +68,7 @@ def _ensure_colour_list(n: int) -> list[str]:
     without reusing the same hue too soon.
     """
     colours = PL_COLOURS_BASE.copy()
+
     lighten_step = 0.15
     current_lighten = lighten_step
     while len(colours) < n:
@@ -75,6 +78,7 @@ def _ensure_colour_list(n: int) -> list[str]:
                 break
         current_lighten = min(current_lighten + lighten_step, 0.9)
     return colours[:n]
+
 
 PL_COLOURS_DEFAULT = PL_COLOURS_BASE.copy()
 
@@ -371,6 +375,7 @@ alt.themes.enable("atlas_light")
 
 alt.data_transformers.disable_max_rows()
 alt.renderers.set_embed_options(
+    # Only allow exporting as PNG. Disable SVG, source, compiled and editor links.
     actions={"export": {"png": True, "svg": False}, "source": False, "compiled": False, "editor": False}
 )
 
@@ -455,7 +460,9 @@ def donut_chart_clean(df_pct: pd.DataFrame, cat_field: str, pct_field: str, titl
     data = df_pct.copy().rename(columns={pct_field: "Percent"})
     data[cat_field] = data[cat_field].astype(str)
     data["PercentLabel"] = data["Percent"].map(lambda v: f"{v:.1f}%")
+    # Determine how many colours are needed and build a palette accordingly
     colour_list = _ensure_colour_list(len(data))
+    # Build the base chart; `stack=True` computes cumulative start/end angles
     base = alt.Chart(data).encode(
         theta=alt.Theta("Percent:Q", stack=True),
         color=alt.Color(f"{cat_field}:N", legend=alt.Legend(title=None, orient="right"), scale=alt.Scale(range=colour_list)),
@@ -463,7 +470,6 @@ def donut_chart_clean(df_pct: pd.DataFrame, cat_field: str, pct_field: str, titl
     )
     arc = base.mark_arc(innerRadius=60, outerRadius=110, stroke="#ffffff", strokeWidth=1)
     THRESHOLD = 5.0
-
     text = base.mark_text(
         size=13,
         color="#020617",
@@ -475,11 +481,16 @@ def donut_chart_clean(df_pct: pd.DataFrame, cat_field: str, pct_field: str, titl
     ).transform_calculate(
         radius=f"datum.Percent >= {THRESHOLD} ? 95 : 135"
     )
-    chart = (arc + text).properties(
-        width=400,
-        height=400,
-        title=(alt.TitleParams(title, fontSize=16, fontWeight=700, anchor="start") if title else None),
-    ).configure_view(strokeWidth=0)
+    chart = (arc + text)
+    if title:
+        chart = chart.properties(
+            width=400,
+            height=400,
+            title=alt.TitleParams(title, fontSize=16, fontWeight=700, anchor="start"),
+        )
+    else:
+        chart = chart.properties(width=400, height=400)
+    chart = chart.configure_view(strokeWidth=0)
     st.altair_chart(chart, use_container_width=True)
 
 
@@ -493,12 +504,19 @@ def bar_chart_from_pct(
     min_pct: float | None = None,
     sort_by_pct: bool = True,
 ):
+    """Render a bar chart from a percentage DataFrame.
 
+    The chart can be horizontal or vertical. Categories are sorted in descending
+    order of percentage by default, but you may supply `sort_by_pct=False` to
+    preserve the order in the provided DataFrame (useful for binned ranges
+    like 0–25%, 26–50%, etc.). You may also supply a minimum percentage
+    threshold to filter out small categories. If more categories exist than
+    `max_categories`, only the top N will be shown.
+    """
     if df_pct.empty:
         return
     data = df_pct.copy().rename(columns={pct_field: "Percent"})
     data[cat_field] = data[cat_field].astype(str)
-    # Sort categories by percentage if requested
     if sort_by_pct:
         data = data.sort_values("Percent", ascending=False)
     if min_pct is not None:
@@ -508,7 +526,6 @@ def bar_chart_from_pct(
     if data.empty:
         return
     data["PercentLabel"] = data["Percent"].map(lambda v: f"{v:.1f}%")
-    # Use enough colours for all categories
     colours = _ensure_colour_list(len(data))
     if horizontal:
         base = alt.Chart(data).encode(
@@ -535,10 +552,15 @@ def bar_chart_from_pct(
             fontWeight=600,
         ).encode(text=alt.Text("PercentLabel:N"))
         height = max(260, 32 * len(data))
-        chart = (bars + labels).properties(
-            height=height,
-            title=(alt.TitleParams(title, fontSize=16, fontWeight=700, anchor="start") if title else None),
-        ).configure_axisY(labelPadding=8)
+        chart = (bars + labels)
+        if title:
+            chart = chart.properties(
+                height=height,
+                title=alt.TitleParams(title, fontSize=16, fontWeight=700, anchor="start"),
+            )
+        else:
+            chart = chart.properties(height=height)
+        chart = chart.configure_axisY(labelPadding=8)
     else:
         base = alt.Chart(data).encode(
             x=alt.X(
@@ -563,10 +585,14 @@ def bar_chart_from_pct(
             color="#020617",
             fontWeight=600,
         ).encode(text=alt.Text("PercentLabel:N"))
-        chart = (bars + labels).properties(
-            height=400,
-            title=(alt.TitleParams(title, fontSize=16, fontWeight=700, anchor="start") if title else None),
-        )
+        chart = (bars + labels)
+        if title:
+            chart = chart.properties(
+                height=400,
+                title=alt.TitleParams(title, fontSize=16, fontWeight=700, anchor="start"),
+            )
+        else:
+            chart = chart.properties(height=400)
     st.altair_chart(chart, use_container_width=True)
 
 
@@ -740,7 +766,7 @@ def main():
         """,
         unsafe_allow_html=True,
     )
-    # embed pickaxe widget 
+    # embed pickaxe widget (if required; else could be removed)
     pickaxe_html = """
     <div id="deployment-5870ff7d-8fcf-4395-976b-9e9fdefbb0ff" style="width:100%; max-width:1200px; margin:0 auto;"></div>
     <script src="https://studio.pickaxe.co/api/embed/bundle.js" defer></script>
@@ -753,6 +779,7 @@ def main():
     # ---- Column names ----
     COL_REGION = "Please select the region where your company is headquartered."
     COL_INDUSTRY = "What industry sector does your company operate in?"
+    # Attempt to find the revenue and employee columns using flexible matching
     COL_REVENUE = find_col(
         df,
         exact="What is your companys estimated annual revenue?",
@@ -766,7 +793,7 @@ def main():
     COL_DEAL_SIZE = "How does your average deal size involving partners compare to direct or non-partner deals?"
     COL_CAC = "How does your customer acquisition cost (CAC) from partners compared to direct sales and marketing?"
     COL_SALES_CYCLE = "How does your partner-led sales cycle compare to your direct sales cycle?"
-    COL_WIN_RATE = "What’s your win rate for deals where partners are involved?"
+    COL_WIN_RATE = "What’s your win rate for deals where partners are involved?" 
     COL_PRIMARY_GOAL = find_col(df, substrings=["main goal for partnerships in the next 12 months"])
     COL_EXEC_EXPECT = find_col(df, substrings=["executive teams expectations of partnerships", "executive team’s expectations of partnerships"])
     COL_EXPECTED_REV = find_col(df, substrings=["expected to come from partnerships in the next 12 months"])
@@ -783,18 +810,14 @@ def main():
     COL_PARTNER_FOCUS = find_col(df, substrings=["focus next 12 months"])
     COL_STRATEGIC_BET = find_col(df, substrings=["Strategic bet", "strategic bet next 12 months"])
     COL_FORECAST_PERF = find_col(df, substrings=["Forecasted performance", "forecasting your performance"])
-
     COL_TOTAL_PARTNERS = "How many total partners do you have?"
     COL_ACTIVE_PARTNERS = "How many active partners generated revenue in the last 12 months?"
     COL_TIME_TO_REVENUE = "How long does it typically take for a partnership to generate revenue after the first meeting?"
-
     COL_REPORTING = find_col(df, substrings=["report to", "majority of your partner organization report"])
     COL_TOP3_BUDGET_PREFIX = "What are the top 3 budget line items for your Partnerships organization, excluding headcount?"
-
     COL_TRAINING = find_col(df, substrings=["level of training", "training or enablement"])
-
     SAT_PREFIX = "How do you measure partner satisfaction?"
-
+    # RegionStd helper
     if COL_REGION in df.columns:
         df = df.copy()
         df["RegionStd"] = df[COL_REGION].map(normalize_region_label)
@@ -899,7 +922,6 @@ def main():
         ]
         if c is not None
     }
-    # Exclude individual columns used for partnership type summaries from additional insights
     partnership_have_cols = [col for col in df.columns if "Which of the following Partnership types does your company have?" in col]
     partnership_expand_cols = [col for col in df.columns if "which partnership types are you planning to expand" in col.lower()]
     for col in partnership_have_cols + partnership_expand_cols:
