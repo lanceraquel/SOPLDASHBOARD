@@ -1171,46 +1171,59 @@ def main():
             render_container_if(mi_has, mi_chart)
 
 
-        # Partnership types your company currently has (multi-select counts)
+# ------------------------------------------------------------------
+# Current partnership types (multi-select, forced labels)
+# ------------------------------------------------------------------
         create_section_header("Current partnership types")
-        part_cols = [c for c in flt.columns if "Which of the following Partnership types does your company have?" in c]
 
-        if part_cols:
-            counts = {}
+        ptype_patterns = {
+        "Solution Partnerships": "Solution Partnerships",
+        "Channel Partnerships": "Channel Partnerships",
+        "Product Partnerships": "Product Partnerships",
+        "Affiliate Partnerships": "Affiliate Partnerships",
+        "Marketplace Partnerships": "Marketplace Partnerships",
+        }
 
-    # Denominator = respondents who answered at least one of these options
-            respondents_mask = flt[part_cols].apply(lambda row: row.notna().any(), axis=1)
-            respondents_part = respondents_mask.sum()
 
-            for col in part_cols:
-        # convert to numeric 1/0 for selected/unselected
-                s = pd.to_numeric(flt[col], errors="coerce")
-                total_selected = s.sum(skipna=True)
-                if total_selected > 0:
-            # start from the last underscore segment (Qualtrics often appends _1, _2, etc.)
-                    raw_label = col.split("_")[-1]
+        col_map = {}
+        for short_label, needle in ptype_patterns.items():
+            matches = [c for c in flt.columns if "Which of the following Partnership types does your company have?" in c and needle in c]
+            if matches:
+        # use the first match for that type
+                col_map[short_label] = matches[0]
 
-            # Normalise en dash → hyphen, then keep only text before the first hyphen
-                    raw_label_norm = raw_label.replace(" – ", " - ")
-                    short_label = raw_label_norm.split(" - ", 1)[0].strip()
+            if col_map:
+                respondents_mask = flt[list(col_map.values())].apply(lambda row: row.notna().any(), axis=1)
+                respondents_part = respondents_mask.sum()
 
-                    counts[short_label] = total_selected
+                counts = {}
+                for short_label, col in col_map.items():
+                    s = pd.to_numeric(flt[col], errors="coerce")
+                    counts[short_label] = s.sum(skipna=True)
 
-                if counts and respondents_part > 0:
-                    df_part = (pd.DataFrame.from_dict(counts, orient="index", columns=["count"]).reset_index().rename(columns={"index": "category"}))
+                if respondents_part > 0:
+                    df_part = pd.DataFrame(
+                        {
+                            "category": list(counts.keys()),   # already in the order of ptype_patterns
+                            "count": list(counts.values()),
+                        }
+                    )
         # % of respondents who have each partnership type
-                    df_part["pct"] = (df_part["count"] / respondents_part) * 100
+                    df_part["pct"] = (df_part["count"] / respondents_part) * 100.0
 
                     def part_chart():
                         bar_chart_from_pct(
-                            df_part,
-                            "category",
-                            "pct",
-                            "Current partnership types",   # or None if you want to avoid double header
-                            horizontal=True,
-                            max_categories=10,
-                        )
-                    render_container_if(True, part_chart)
+                        df_part,
+                        "category",
+                        "pct",
+                        "Current partnership types",
+                        horizontal=True,
+                        max_categories=10,
+                        sort_by_pct=False,  # preserve our forced order
+                    )
+
+                render_container_if(True, part_chart)
+
 
         # New: Partnership types you plan to expand into (multi-select counts)
         create_section_header("Partnership types you plan to expand into")
