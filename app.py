@@ -1184,10 +1184,13 @@ def main():
             "Marketplace Partnerships": "Marketplace Partnerships",
         }
 
-
         col_map = {}
         for short_label, needle in ptype_patterns.items():
-            matches = [c for c in flt.columns if "Which of the following Partnership types does your company have?" in c and needle in c]
+            matches = [
+                c for c in flt.columns 
+                if "Which of the following Partnership types does your company have?" in c 
+                and needle in c
+            ]
             
             if matches:
         # use the first match for that type
