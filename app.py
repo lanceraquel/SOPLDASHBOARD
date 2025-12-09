@@ -1170,42 +1170,47 @@ def main():
 
             render_container_if(mi_has, mi_chart)
 
-        # New: Partnership types your company currently has (multi-select counts)
-        create_section_header("Partnership types your company has")
+
+        # Partnership types your company currently has (multi-select counts)
+        create_section_header("Current partnership types")
         part_cols = [c for c in flt.columns if "Which of the following Partnership types does your company have?" in c]
+
         if part_cols:
             counts = {}
+
+    # Denominator = respondents who answered at least one of these options
+            respondents_mask = flt[part_cols].apply(lambda row: row.notna().any(), axis=1)
+            respondents_part = respondents_mask.sum()
+
             for col in part_cols:
-                # convert to numeric 1/0 for selected/unselected
+        # convert to numeric 1/0 for selected/unselected
                 s = pd.to_numeric(flt[col], errors="coerce")
                 total_selected = s.sum(skipna=True)
                 if total_selected > 0:
-                    # take the label after the underscore
-                    label = col.split("_")[-1]
-                    counts[label] = total_selected
-            if counts:
-                df_part = (
-                    pd.DataFrame.from_dict(counts, orient="index", columns=["count"])
-                    .reset_index()
-                    .rename(columns={"index": "category"})
-                )
-                # compute percentage relative to number of responses after filtering
-                if len(flt) > 0:
-                    df_part["pct"] = (df_part["count"] / len(flt)) * 100
-                else:
-                    df_part["pct"] = 0
+            # start from the last underscore segment (Qualtrics often appends _1, _2, etc.)
+                    raw_label = col.split("_")[-1]
 
-                def part_chart():
-                    bar_chart_from_pct(
-                        df_part,
-                        "category",
-                        "pct",
-                        "Current partnership types",
-                        horizontal=True,
-                        max_categories=10,
-                    )
+            # Normalise en dash → hyphen, then keep only text before the first hyphen
+                    raw_label_norm = raw_label.replace(" – ", " - ")
+                    short_label = raw_label_norm.split(" - ", 1)[0].strip()
 
-                render_container_if(True, part_chart)
+                    counts[short_label] = total_selected
+
+                if counts and respondents_part > 0:
+                    df_part = (pd.DataFrame.from_dict(counts, orient="index", columns=["count"]).reset_index().rename(columns={"index": "category"}))
+        # % of respondents who have each partnership type
+                    df_part["pct"] = (df_part["count"] / respondents_part) * 100
+
+                    def part_chart():
+                        bar_chart_from_pct(
+                            df_part,
+                            "category",
+                            "pct",
+                            "Current partnership types",   # or None if you want to avoid double header
+                            horizontal=True,
+                            max_categories=10,
+                        )
+                    render_container_if(True, part_chart)
 
         # New: Partnership types you plan to expand into (multi-select counts)
         create_section_header("Partnership types you plan to expand into")
