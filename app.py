@@ -1062,30 +1062,31 @@ def main():
 
             render_container_if(pg_has, pg_chart)
 
+
         create_section_header("Executive expectations of partnerships")
         if COL_EXEC_EXPECT and COL_EXEC_EXPECT in flt.columns:
             ex_has = not flt[COL_EXEC_EXPECT].dropna().empty
 
             def ex_chart():
-        # Take only the label before the dash (Transactional, Strategic, Integrated, Nascent)
-            series = flt[COL_EXEC_EXPECT].dropna().astype(str)
+                series = flt[COL_EXEC_EXPECT].dropna().astype(str)
+                series_norm = series.str.replace(" – ", " - ", regex=False)
+                short_labels = series_norm.str.split(" - ", n=1).str[0].str.strip()
 
-        # Normalise en dashes to a regular hyphen and split once
-            series_norm = series.str.replace(" – ", " - ", regex=False)
-            short_labels = series_norm.str.split(" - ", n=1).str[0].str.strip()
+                ex_pct = value_counts_pct(short_labels)
 
-        # Compute % using the short labels
-            ex_pct = value_counts_pct(short_labels)
+                order = ["Transactional", "Strategic", "Integrated", "Nascent"]
+                ex_pct["category"] = pd.Categorical(ex_pct["category"], categories=order, ordered=True)
+                ex_pct = ex_pct.sort_values("category")
 
-            bar_chart_from_pct(
-                ex_pct,
-                "category",
-                "pct",
-                "Executive expectations",  # chart title stays clean
-                horizontal=True,
-            )
+                bar_chart_from_pct(
+                    ex_pct,
+                    "category",
+                    "pct",
+                    "Executive expectations",
+                    horizontal=True,
+                )
 
-        render_container_if(ex_has, ex_chart)
+            render_container_if(ex_has, ex_chart)
 
         create_section_header("Expected revenue from partnerships (next 12 months)")
         if COL_EXPECTED_REV and COL_EXPECTED_REV in flt.columns:
