@@ -3,6 +3,8 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 import re
+import base64
+from pathlib import Path
 
 # ==================== PAGE CONFIG ====================
 st.set_page_config(
@@ -35,7 +37,7 @@ PL_COLORS = [
 TOP_N_DEFAULT = 4  # default max categories per chart
 
 
-# ==================== ENHANCED CSS / LIGHT THEME ====================
+# ==================== CSS / THEME ====================
 st.markdown(
     """
 <style>
@@ -54,15 +56,10 @@ main.block-container {
 /* Design tokens */
 :root {
     --bg: #f8fafc;
-    --panel: #ffffff;
-    --card: #ffffff;
+    --card-bg: #ffffff;
     --muted: #64748b;
     --text: #020617;
     --accent: #3b308f;
-    --success: #16a34a;
-    --warning: #f59e0b;
-    --danger: #ef4444;
-    --glass: rgba(15,23,42,0.04);
 }
 
 /* App wrapper */
@@ -75,15 +72,6 @@ main.block-container {
 }
 
 /* Header */
-.header-row {
-    display:flex;
-    align-items:flex-start;
-    justify-content:space-between;
-    gap:12px;
-    margin-bottom: 1.5rem;
-    padding-bottom: 1rem;
-    border-bottom: 1px solid #e2e8f0;
-}
 .main-header {
     font-size: 2.8rem;
     font-weight: 900;
@@ -111,89 +99,36 @@ main.block-container {
     font-weight: 400;
 }
 
-/* Logos */
-.logo-group {
-    display:flex;
-    align-items:center;
-    gap:12px;
-}
-.logo-box-img {
-    width:72px;
-    height:72px;
-    border-radius:16px;
-    border:1px solid #e2e8f0;
-    background:#ffffff;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    padding:8px;
-}
-.logo-box-img img {
-    max-width:100%;
-    max-height:100%;
-}
-
-/* Section headers */
-.section-header {
-    font-size: 1.3rem;
-    font-weight: 700;
-    margin-top: 2rem;
-    margin-bottom: 1rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 2px solid #e2e8f0;
-    color: #1e293b !important;
-}
-
-/* Base card design (used by welcome, about, filters, charts) */
-.base-card {
-    background: var(--card);
-    border-radius: 16px;
-    padding: 1.5rem;
+/* Shared card style – used by welcome, about, filters, ALL charts */
+.card {
+    background: var(--card-bg);
+    border-radius: 24px;
+    padding: 1.75rem 1.5rem;
     border: 1px solid #e2e8f0;
-    box-shadow: 0 4px 10px rgba(15,23,42,0.04);
+    box-shadow: 0 10px 30px rgba(15,23,42,0.06);
     margin-bottom: 1.5rem;
 }
 
-/* Static info cards (no hover shadow) */
-.card-static {
-    composes: base-card;
-}
-
-/* Chart tiles: same as base card but add hover + animation */
-.chart-container {
-    background: var(--card);
-    border-radius: 16px;
+/* Charts: SAME card, plus hover + subtle entrance */
+.chart-card {
+    background: var(--card-bg);
+    border-radius: 24px;
     padding: 1.75rem 1.5rem 1.5rem 1.5rem;
     border: 1px solid #e2e8f0;
-    box-shadow: 0 4px 10px rgba(15,23,42,0.04);
+    box-shadow: 0 10px 30px rgba(15,23,42,0.06);
     margin-bottom: 1.5rem;
     opacity: 0;
-    animation: fadeInUp 0.35s ease-out forwards;
+    animation: fadeInUp 0.30s ease-out forwards;
     transition: box-shadow 0.18s ease, transform 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
 }
-.chart-container:hover {
-    box-shadow: 0 16px 36px rgba(15,23,42,0.14);
+.chart-card:hover {
+    box-shadow: 0 20px 45px rgba(15,23,42,0.16);
     transform: translateY(-2px);
     border-color: #cbd5f5;
     background-color: #ffffff;
 }
 
-.chart-caption {
-    font-size: 0.85rem;
-    color: var(--muted) !important;
-    margin-top: 8px;
-    font-style: italic;
-}
-
-/* Filter card */
-.filter-card {
-    background: var(--card);
-    border-radius: 16px;
-    padding: 1.25rem 1.5rem 1.5rem 1.5rem;
-    border: 1px solid #e2e8f0;
-    box-shadow: 0 4px 10px rgba(15,23,42,0.04);
-    margin-bottom: 1.5rem;
-}
+/* Filter card heading */
 .filter-title-row {
     display:flex;
     align-items:center;
@@ -216,31 +151,36 @@ main.block-container {
     color:#EC3D72;
 }
 
-/* Make main-page multiselects look like clean dropdowns — white bg, black text */
-.stMultiSelect > div > div {
-    border-radius: 14px;
+/* Section headers */
+.section-header {
+    font-size: 1.3rem;
+    font-weight: 700;
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #e2e8f0;
+    color: #1e293b !important;
+}
+
+/* Filter widgets in main page */
+.stMultiSelect > div > div,
+.stSelectbox > div > div {
+    border-radius: 16px;
     border: 1px solid #e2e8f0;
-    transition: all 0.18s ease;
     background-color: #ffffff;
     color: #020617 !important;
+    transition: all 0.18s ease;
 }
-.stMultiSelect > div > div:hover {
+.stMultiSelect > div > div:hover,
+.stSelectbox > div > div:hover {
     border-color: #3b308f;
-    box-shadow: 0 0 0 2px rgba(59, 48, 143, 0.18);
+    box-shadow: 0 0 0 2px rgba(59,48,143,0.18);
 }
 .stMultiSelect [data-baseweb="tag"] {
     background-color: #ec3d72 !important;
     color: #ffffff !important;
     border-radius: 999px !important;
     font-weight: 600 !important;
-}
-
-/* Also style selectboxes similarly, in case we use them */
-.stSelectbox > div > div {
-    border-radius: 14px;
-    border: 1px solid #e2e8f0;
-    background-color: #ffffff;
-    color: #020617 !important;
 }
 
 /* Tabs */
@@ -263,6 +203,10 @@ main.block-container {
     color: #ffffff !important;
     box-shadow: 0 0 0 1px #3b308f, 0 10px 18px rgba(0,0,0,0.35);
 }
+.stTabs [data-baseweb="tab"][aria-selected="false"] {
+    background-color: transparent;
+    color: #e5e7eb !important;
+}
 .stTabs [data-baseweb="tab"][aria-selected="true"]::after {
     content: "";
     display:block;
@@ -272,15 +216,8 @@ main.block-container {
     border-radius: 999px;
     background: linear-gradient(90deg, #ec3d72, #f97373);
 }
-.stTabs [data-baseweb="tab"][aria-selected="true"] * {
-    color: #ffffff !important;
-}
-.stTabs [data-baseweb="tab"][aria-selected="false"] {
-    background-color: transparent;
-    color: #e5e7eb !important;
-}
 
-/* Vega / Altair */
+/* Altair / Vega */
 .vega-embed .vega-actions {
     background: #ffffff !important;
     border: 1px solid #e2e8f0 !important;
@@ -293,23 +230,11 @@ main.block-container {
     color: #020617 !important;
     font-weight: 500 !important;
 }
-.vega-embed details > summary svg {
-    stroke: #020617 !important;
-    fill: #020617 !important;
-}
-.vega-embed details > summary {
-    background-color:#ffffff !important;
-    border-radius:50% !important;
-    border:1px solid #e2e8f0 !important;
-}
-.vega-embed details[open] > summary {
-    box-shadow:0 2px 6px rgba(15,23,42,0.2);
-}
 .vega-embed text {
     font-size: 11px;
 }
 
-/* Filter pills under header */
+/* Filter pills */
 .filter-pill-row {
     display:flex;
     flex-wrap:wrap;
@@ -332,11 +257,11 @@ main.block-container {
 
 /* Assistant header */
 .assistant-header {
-    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-    border-radius: 12px;
+    border-radius: 24px;
     padding: 1.25rem 1.5rem;
     margin: 1.5rem 0 1rem 0;
     border: 1px solid #e2e8f0;
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
 }
 
 /* Footer */
@@ -354,34 +279,16 @@ main.block-container {
     .main-header {
         font-size: 2.2rem;
     }
-    .header-row {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-    .logo-group {
-        margin-top: 0.75rem;
-    }
 }
 
-/* Fade-in animation for chart tiles */
+/* Fade-in animation for charts */
 @keyframes fadeInUp {
     from { opacity:0; transform: translateY(4px); }
     to   { opacity:1; transform: translateY(0); }
 }
 
-/* Kill empty rectangles */
-.chart-container:empty {
-    display: none !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    border: 0 !important;
-    box-shadow: none !important;
-}
-.chart-container > div:empty,
-.chart-container > p:empty {
-    display: none !important;
-}
-div[data-testid="column"]:empty {
+/* Remove any truly empty chart wrappers */
+.chart-card:empty {
     display: none !important;
 }
 </style>
@@ -424,7 +331,6 @@ def atlas_light_theme():
                 "anchor": "start",
                 "offset": 12,
             },
-            "header": {"labelFontSize": 12, "titleFontSize": 14},
         }
     }
 
@@ -436,13 +342,9 @@ alt.renderers.set_embed_options(
     actions={"export": True, "source": False, "compiled": False, "editor": False}
 )
 
-# ==================== DATA LOADER ====================
+# ==================== DATA / UTILS ====================
 @st.cache_data(show_spinner=True)
 def load_data() -> pd.DataFrame:
-    """
-    Load survey data from Google Sheets exported as CSV.
-    The URL should be set in Streamlit secrets as gsheet_url.
-    """
     url = st.secrets.get("gsheet_url", None)
     if not url:
         st.error(
@@ -462,9 +364,18 @@ def load_data() -> pd.DataFrame:
     return pd.DataFrame()
 
 
-# ==================== HELPERS ====================
+def img_to_base64(path: str) -> str | None:
+    p = Path(path)
+    if not p.exists():
+        return None
+    try:
+        data = p.read_bytes()
+        return base64.b64encode(data).decode("utf-8")
+    except Exception:
+        return None
+
+
 def value_counts_pct(series: pd.Series) -> pd.DataFrame:
-    """Return a dataframe with categories and percentages of non-null responses."""
     s = series.dropna()
     if s.empty:
         return pd.DataFrame(columns=["category", "pct"])
@@ -477,7 +388,6 @@ def value_counts_pct(series: pd.Series) -> pd.DataFrame:
 
 
 def binned_pct_custom(series: pd.Series, edges: list[float], labels: list[str]) -> pd.DataFrame:
-    """Convert a numeric series into bins and compute percentages."""
     s = pd.to_numeric(series, errors="coerce").dropna()
     if s.empty:
         return pd.DataFrame(columns=["bin", "pct"])
@@ -487,13 +397,6 @@ def binned_pct_custom(series: pd.Series, edges: list[float], labels: list[str]) 
 
 
 def _default_label_from_col(col_name: str) -> str:
-    """
-    For multi-select columns:
-    - Use text in quotes if present
-    - Else use text before " – "
-    - Else use text after "? "
-    - Else fall back to whole column name
-    """
     if '"' in col_name:
         parts = col_name.split('"')
         if len(parts) >= 3:
@@ -508,18 +411,12 @@ def _default_label_from_col(col_name: str) -> str:
 def multi_select_to_pct(
     df: pd.DataFrame, cols: list[str], label_parser=_default_label_from_col
 ) -> pd.DataFrame:
-    """
-    For a set of multi-select checkbox columns (binary 1/0),
-    compute percentage of respondents who selected each option.
-    """
     if not cols:
         return pd.DataFrame(columns=["category", "pct"])
-
     sub = df[cols].apply(pd.to_numeric, errors="coerce")
     n_resp = sub.notna().any(axis=1).sum()
     if n_resp == 0:
         return pd.DataFrame(columns=["category", "pct"])
-
     counts = sub.sum(skipna=True)
     out = counts.reset_index()
     out.columns = ["col", "count"]
@@ -533,7 +430,6 @@ def create_section_header(title: str):
 
 
 def donut_chart_clean(df_pct: pd.DataFrame, cat_field: str, pct_field: str, title: str):
-    """Render a donut chart with multi-color arcs and tooltips."""
     if df_pct.empty:
         return
     data = df_pct.copy().rename(columns={pct_field: "Percent"})
@@ -569,7 +465,6 @@ def bar_chart_from_pct(
     max_categories: int | None = TOP_N_DEFAULT,
     min_pct: float | None = None,
 ):
-    """Render a bar chart with optional horizontal orientation and category truncation."""
     if df_pct.empty:
         return
 
@@ -681,7 +576,6 @@ def normalize_region_label(x):
 
 
 def find_col(df: pd.DataFrame, exact: str | None = None, substrings: list[str] | None = None):
-    """Return the first column in df that matches an exact name or contains any substring."""
     if exact and exact in df.columns:
         return exact
     if substrings:
@@ -693,15 +587,12 @@ def find_col(df: pd.DataFrame, exact: str | None = None, substrings: list[str] |
 
 
 def normalize_yes_no(series: pd.Series) -> pd.Series:
-    """Normalize various yes/no representations into Yes/No strings."""
     s = series.dropna()
     if s.empty:
         return series
-
     coerced = pd.to_numeric(series, errors="coerce")
     if coerced.notna().any() and coerced.dropna().isin([0, 1]).all():
         return coerced.map({1: "Yes", 0: "No"})
-
     lower = series.astype(str).str.strip().str.lower()
     mapping = {
         "1": "Yes",
@@ -719,40 +610,25 @@ def normalize_yes_no(series: pd.Series) -> pd.Series:
     return mapped.where(mapped.notna(), series.astype(str))
 
 
-def render_container_if(has_data: bool, chart_fn):
-    """Render a chart inside a styled container only if there is data."""
-    if not has_data:
-        return
-    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+def render_chart_card(chart_fn):
+    st.markdown('<div class="chart-card">', unsafe_allow_html=True)
     chart_fn()
     st.markdown("</div>", unsafe_allow_html=True)
 
 
-def two_up_or_full(left_has: bool, left_fn, right_has: bool, right_fn):
-    """
-    Display two charts side-by-side in a 2-column grid.
-    If only one chart has data, it still uses the same grid so tiles line up.
-    """
+def two_up_grid(left_has: bool, left_fn, right_has: bool, right_fn):
     if not left_has and not right_has:
         return
-
-    c1, c2 = st.columns(2)
-
-    with c1:
+    col1, col2 = st.columns(2)
+    with col1:
         if left_has:
-            render_container_if(True, left_fn)
-        else:
-            st.markdown("")
-
-    with c2:
+            render_chart_card(left_fn)
+    with col2:
         if right_has:
-            render_container_if(True, right_fn)
-        else:
-            st.markdown("")
+            render_chart_card(right_fn)
 
 
 def clean_question_title(col_name: str) -> str:
-    """Clean Qualtrics auto-generated column names (e.g., remove _Column2)."""
     title = re.sub(r"_Column\d+", "", col_name)
     title = title.replace("_", " ")
     title = re.sub(r"\s+", " ", title).strip()
@@ -760,7 +636,6 @@ def clean_question_title(col_name: str) -> str:
 
 
 def extract_platform_tool(col_name: str) -> str | None:
-    """Extract the platform/tool name from Qualtrics multiple-column names."""
     if "Which platforms do you plan to use more, less, or steady?" not in col_name:
         return None
     parts = col_name.split("?", 1)
@@ -777,7 +652,6 @@ def extract_platform_tool(col_name: str) -> str | None:
 
 
 def render_filter_pills(selected_regions, selected_revenue, selected_employees):
-    """Render pills summarizing selected filters under the header."""
     pills = []
     if selected_regions is None:
         pills.append("Region: <span>All</span>")
@@ -804,53 +678,72 @@ def render_filter_pills(selected_regions, selected_revenue, selected_employees):
 def main():
     st.markdown('<div class="app-wrapper">', unsafe_allow_html=True)
 
-    # ---- Header with logos ----
+    # ----- Header with logos -----
+    col_head_left, col_head_right = st.columns([4, 1.5])
+
+    with col_head_left:
+        st.markdown(
+            """
+            <div>
+              <div class="main-header">STATE OF PARTNERSHIP LEADERS 2025</div>
+              <div class="sub-header">Strategic Insights Dashboard • Partnership Performance Analytics</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with col_head_right:
+        pl_b64 = img_to_base64("PL Logo.png")
+        eu_b64 = img_to_base64("Euler logo.png")
+
+        html_parts = []
+        html_parts.append(
+            "<div style='text-align:right; font-size:0.85rem; color:#64748b; margin-bottom:0.35rem;'>Sponsored by</div>"
+        )
+        if eu_b64:
+            html_parts.append(
+                f"""
+                <a href="https://eulerapp.com/" target="_blank" style="text-decoration:none;">
+                    <img src="data:image/png;base64,{eu_b64}" alt="Euler" style="height:40px; border-radius:8px; border:1px solid #e2e8f0; padding:4px; background:#ffffff;" />
+                </a>
+                """
+            )
+        if pl_b64:
+            html_parts.append(
+                f"""
+                <div style="margin-top:0.3rem;">
+                    <img src="data:image/png;base64,{pl_b64}" alt="Partnership Leaders" style="height:32px;" />
+                </div>
+                """
+            )
+        st.markdown("".join(html_parts), unsafe_allow_html=True)
+
+    # ----- Intro card -----
     st.markdown(
         """
-    <div class="header-row">
-      <div>
-        <div class="main-header">STATE OF PARTNERSHIP LEADERS 2025</div>
-        <div class="sub-header">Strategic Insights Dashboard • Partnership Performance Analytics</div>
-      </div>
-      <div class="logo-group">
-        <div class="logo-box-img">
-          <img src="PL Logo.png" alt="Partnership Leaders Logo"/>
+        <div class="card">
+          <p><strong>Welcome to the State of Partnership Leaders 2025 Dashboard.</strong></p>
+          <p>
+          In prior years, we have released a 40+ page document with all of the data but with the advancements in AI adoption,
+          we are trying something new.
+          </p>
+          <p><strong>Below you will find:</strong></p>
+          <ul>
+            <li>
+              <strong>PartnerOps Agent</strong> – An AI agent trained on the SOPL dataset – think of it as your Partner Operations collaborator as you review the data.
+              You can ask it questions about the data or about your own strategy, we will not collect any of your inputed data.
+            </li>
+            <li>
+              <strong>SOPL Data Dashboard</strong> – You will find all of the data from the report in an interactive dashboard below.
+              Use the filters to customize the data to your interests and the Performance and Partner Impact related tabs to navigate the main themes.
+            </li>
+          </ul>
         </div>
-        <a href="https://eulerapp.com/" target="_blank" class="logo-box-img" style="text-decoration:none;">
-          <img src="Euler logo.png" alt="Euler Logo"/>
-        </a>
-      </div>
-    </div>
-    """,
+        """,
         unsafe_allow_html=True,
     )
 
-    # ---- Introduction ----
-    st.markdown(
-        """
-<div class="card-static base-card" style="margin-top:0;">
-  <p><strong>Welcome to the State of Partnership Leaders 2025 Dashboard.</strong></p>
-  <p>
-  In prior years, we have released a 40+ page document with all of the data but with the advancements in AI adoption,
-  we are trying something new.
-  </p>
-  <p><strong>Below you will find:</strong></p>
-  <ul>
-    <li>
-      <strong>PartnerOps Agent</strong> – An AI agent trained on the SOPL dataset – think of it as your Partner Operations collaborator as you review the data.
-      You can ask it questions about the data or about your own strategy, we will not collect any of your inputed data.
-    </li>
-    <li>
-      <strong>SOPL Data Dashboard</strong> – You will find all of the data from the report in an interactive dashboard below.
-      Use the filters to customize the data to your interests and the Performance and Partner Impact related tabs to navigate the main themes.
-    </li>
-  </ul>
-</div>
-""",
-        unsafe_allow_html=True,
-    )
-
-    # ---- Assistant widget ----
+    # ----- Assistant -----
     st.markdown(
         """
         <div class="assistant-header">
@@ -862,20 +755,19 @@ def main():
         """,
         unsafe_allow_html=True,
     )
-
     pickaxe_html = """
     <div id="deployment-5870ff7d-8fcf-4395-976b-9e9fdefbb0ff" style="width:100%; max-width:1200px; margin:0 auto;"></div>
     <script src="https://studio.pickaxe.co/api/embed/bundle.js" defer></script>
     """
     components.html(pickaxe_html, height=650, scrolling=False)
 
-    # ---- Load data ----
+    # ----- Data -----
     df = load_data()
     if df.empty:
         st.markdown("</div>", unsafe_allow_html=True)
         st.stop()
 
-    # ---- Column names ----
+    # ----- Column mappings -----
     COL_REGION = "Please select the region where your company is headquartered."
     COL_INDUSTRY = "What industry sector does your company operate in?"
     COL_REVENUE = find_col(
@@ -923,7 +815,6 @@ def main():
     COL_TOTAL_PARTNERS = "How many total partners do you have?"
     COL_ACTIVE_PARTNERS = "How many active partners generated revenue in the last 12 months?"
 
-    # Multi-select prefixes
     INFLUENCE_PREFIX = "Besides Sourced Revenue, how else does your company measure"
     PARTNERSHIP_HAVE_PREFIX = "Which of the following Partnership types does your company have?"
     PARTNERSHIP_EXPAND_PREFIX = "Which partnership types are you planning to expand into"
@@ -931,140 +822,135 @@ def main():
     COL_TOP3_BUDGET_PREFIX = "What are the top 3 budget line items for your Partnerships organization, excluding headcount?"
     SAT_PREFIX = "How do you measure partner satisfaction?"
 
-    # RegionStd helper
+    # RegionStd column
     if COL_REGION in df.columns:
         df = df.copy()
         df["RegionStd"] = df[COL_REGION].map(normalize_region_label)
     else:
         df["RegionStd"] = None
 
-    # ---- Filters card (no sidebar) ----
-    with st.container():
-        st.markdown('<div class="filter-card">', unsafe_allow_html=True)
-        st.markdown(
-            """
-            <div class="filter-title-row">
-              <div class="filter-title-icon">⧉</div>
-              <span>Filters</span>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        col_f1, col_f2, col_f3 = st.columns(3)
+    # ----- Filters card -----
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown(
+        """
+        <div class="filter-title-row">
+          <div class="filter-title-icon">⧉</div>
+          <span>Filters</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    f1, f2, f3 = st.columns(3)
 
-        # Region filter
-        selected_regions_clean = None
-        with col_f1:
-            if "RegionStd" in df.columns:
-                region_options = sorted(df["RegionStd"].dropna().unique().tolist())
-                sentinel_region = "All Regions"
-                region_display_options = [sentinel_region] + region_options
-                selected_regions_raw = st.multiselect(
-                    "Region",
-                    region_display_options,
-                    [sentinel_region],
-                )
-                if sentinel_region in selected_regions_raw or not selected_regions_raw:
-                    selected_regions_clean = None
-                else:
-                    selected_regions_clean = selected_regions_raw
+    # Region
+    with f1:
+        if "RegionStd" in df.columns:
+            region_options = sorted(df["RegionStd"].dropna().unique().tolist())
+            sentinel_region = "All Regions"
+            region_display_options = [sentinel_region] + region_options
+            selected_regions_raw = st.multiselect(
+                "Region",
+                region_display_options,
+                [sentinel_region],
+            )
+            if sentinel_region in selected_regions_raw or not selected_regions_raw:
+                selected_regions = None
             else:
-                selected_regions_clean = None
+                selected_regions = selected_regions_raw
+        else:
+            selected_regions = None
 
-        # Revenue filter
-        selected_revenue_clean = None
-        with col_f2:
-            if COL_REVENUE in df.columns:
-                revenue_options = df[COL_REVENUE].dropna().unique().tolist()
-                revenue_order = [
-                    "Less than $50 million",
-                    "$50M – $250M",
-                    "$250M – $1B",
-                    "$1B – $10B",
-                    "More than $10B",
-                ]
-                ordered_revenue = [r for r in revenue_order if r in revenue_options] + [
-                    r for r in revenue_options if r not in revenue_order
-                ]
-                sentinel_rev = "All Revenue Bands"
-                revenue_display_options = [sentinel_rev] + ordered_revenue
-                selected_revenue_raw = st.multiselect(
-                    "Annual Revenue",
-                    revenue_display_options,
-                    [sentinel_rev],
-                )
-                if sentinel_rev in selected_revenue_raw or not selected_revenue_raw:
-                    selected_revenue_clean = None
-                else:
-                    selected_revenue_clean = selected_revenue_raw
+    # Revenue
+    with f2:
+        if COL_REVENUE in df.columns:
+            revenue_options = df[COL_REVENUE].dropna().unique().tolist()
+            revenue_order = [
+                "Less than $50 million",
+                "$50M – $250M",
+                "$250M – $1B",
+                "$1B – $10B",
+                "More than $10B",
+            ]
+            ordered_revenue = [r for r in revenue_order if r in revenue_options] + [
+                r for r in revenue_options if r not in revenue_order
+            ]
+            sentinel_rev = "All Revenue Bands"
+            revenue_display_options = [sentinel_rev] + ordered_revenue
+            selected_revenue_raw = st.multiselect(
+                "Annual Revenue",
+                revenue_display_options,
+                [sentinel_rev],
+            )
+            if sentinel_rev in selected_revenue_raw or not selected_revenue_raw:
+                selected_revenue = None
             else:
-                selected_revenue_clean = None
+                selected_revenue = selected_revenue_raw
+        else:
+            selected_revenue = None
 
-        # Employees filter
-        selected_employees_clean = None
-        with col_f3:
-            if COL_EMPLOYEES in df.columns:
-                emp_options = df[COL_EMPLOYEES].dropna().unique().tolist()
-                emp_order = [
-                    "Less than 100 employees",
-                    "100 – 500 employees",
-                    "501 – 5,000 employees",
-                    "More than 5,000 employees",
-                ]
-                ordered_emp = [e for e in emp_order if e in emp_options] + [
-                    e for e in emp_options if e not in emp_order
-                ]
-                sentinel_emp = "All Sizes"
-                emp_display_options = [sentinel_emp] + ordered_emp
-                selected_employees_raw = st.multiselect(
-                    "Total Employees",
-                    emp_display_options,
-                    [sentinel_emp],
-                )
-                if sentinel_emp in selected_employees_raw or not selected_employees_raw:
-                    selected_employees_clean = None
-                else:
-                    selected_employees_clean = selected_employees_raw
+    # Employees
+    with f3:
+        if COL_EMPLOYEES in df.columns:
+            emp_options = df[COL_EMPLOYEES].dropna().unique().tolist()
+            emp_order = [
+                "Less than 100 employees",
+                "100 – 500 employees",
+                "501 – 5,000 employees",
+                "More than 5,000 employees",
+            ]
+            ordered_emp = [e for e in emp_order if e in emp_options] + [
+                e for e in emp_options if e not in emp_order
+            ]
+            sentinel_emp = "All Sizes"
+            emp_display_options = [sentinel_emp] + ordered_emp
+            selected_employees_raw = st.multiselect(
+                "Total Employees",
+                emp_display_options,
+                [sentinel_emp],
+            )
+            if sentinel_emp in selected_employees_raw or not selected_employees_raw:
+                selected_employees = None
             else:
-                selected_employees_clean = None
+                selected_employees = selected_employees_raw
+        else:
+            selected_employees = None
 
-        st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
     # Apply filters
     flt = df.copy()
-    if selected_regions_clean:
-        flt = flt[flt["RegionStd"].isin(selected_regions_clean)]
-    if selected_revenue_clean and COL_REVENUE in flt.columns:
-        flt = flt[flt[COL_REVENUE].isin(selected_revenue_clean)]
-    if selected_employees_clean and COL_EMPLOYEES in flt.columns:
-        flt = flt[flt[COL_EMPLOYEES].isin(selected_employees_clean)]
+    if selected_regions:
+        flt = flt[flt["RegionStd"].isin(selected_regions)]
+    if selected_revenue and COL_REVENUE in flt.columns:
+        flt = flt[flt[COL_REVENUE].isin(selected_revenue)]
+    if selected_employees and COL_EMPLOYEES in flt.columns:
+        flt = flt[flt[COL_EMPLOYEES].isin(selected_employees)]
 
-    # Filter summary pills
-    render_filter_pills(selected_regions_clean, selected_revenue_clean, selected_employees_clean)
+    render_filter_pills(selected_regions, selected_revenue, selected_employees)
 
-    # ---- About section ----
+    # ----- About this dataset -----
     create_section_header("About this dashboard and dataset")
     st.markdown(
         """
-    <div class="card-static base-card" style="margin-top:0;">
-      <p>
-      Respondents represent organizations from four key regions, namely North America (NA),
-      Europe the Middle East and Africa (EMEA), Asia Pacific (APAC), and Latin America (LATAM),
-      and include companies of varying sizes and revenue levels ranging from less than 50 million
-      dollars to over 10 billion dollars in annual revenue. All survey waves ensure a minimum of
-      100 qualified respondents each year to provide consistent and data-driven insights across regions
-      and industries.
-      </p>
-      <p style="margin-top:0.5rem;">
-      Use the filters above (Region, Annual Revenue, Total Employees) to narrow the view;
-      the charts in every tab update automatically to reflect the current selection.
-      </p>
-    </div>
-    """,
+        <div class="card">
+          <p>
+          Respondents represent organizations from four key regions, namely North America (NA),
+          Europe the Middle East and Africa (EMEA), Asia Pacific (APAC), and Latin America (LATAM),
+          and include companies of varying sizes and revenue levels ranging from less than 50 million
+          dollars to over 10 billion dollars in annual revenue. All survey waves ensure a minimum of
+          100 qualified respondents each year to provide consistent and data-driven insights across regions
+          and industries.
+          </p>
+          <p style="margin-top:0.5rem;">
+          Use the filters above (Region, Annual Revenue, Total Employees) to narrow the view;
+          the charts in every tab update automatically to reflect the current selection.
+          </p>
+        </div>
+        """,
         unsafe_allow_html=True,
     )
 
-    # Columns already wired to specific visuals
+    # Track columns used to avoid duplicates in Additional Insights
     used_cols = {
         c
         for c in [
@@ -1100,8 +986,6 @@ def main():
         ]
         if c is not None
     }
-
-    # Exclude multi-select blocks from Additional Insights
     for col in df.columns:
         if (
             INFLUENCE_PREFIX in col
@@ -1113,7 +997,7 @@ def main():
         ):
             used_cols.add(col)
 
-    # ---- Tabs ----
+    # ----- Tabs -----
     tab_firmo, tab_perf, tab_strategy, tab_portfolio, tab_ops, tab_team, tab_tech, tab_market, tab_extra = st.tabs(
         [
             "Firmographics",
@@ -1129,11 +1013,12 @@ def main():
     )
 
     # ======================================================
-    # FIRMOGRAPHICS
+    # Firmographics
     # ======================================================
     with tab_firmo:
         create_section_header("Company profile")
 
+        # HQ region + revenue
         reg_has = "RegionStd" in flt.columns and not flt["RegionStd"].dropna().empty
 
         def reg_chart():
@@ -1155,8 +1040,9 @@ def main():
             rev_pct_sorted = rev_pct.sort_values("category")
             donut_chart_clean(rev_pct_sorted, "category", "pct", "Company annual revenue")
 
-        two_up_or_full(reg_has, reg_chart, rev_has, rev_chart)
+        two_up_grid(reg_has, reg_chart, rev_has, rev_chart)
 
+        # Employees + industry
         emp_has = COL_EMPLOYEES in flt.columns and not flt[COL_EMPLOYEES].dropna().empty
 
         def emp_chart():
@@ -1177,10 +1063,10 @@ def main():
             ind_pct = value_counts_pct(flt[COL_INDUSTRY])
             donut_chart_clean(ind_pct, "category", "pct", "Industry sector")
 
-        two_up_or_full(emp_has, emp_chart, ind_has, ind_chart)
+        two_up_grid(emp_has, emp_chart, ind_has, ind_chart)
 
     # ======================================================
-    # PERFORMANCE
+    # Performance
     # ======================================================
     with tab_perf:
         create_section_header("Partner impact & performance")
@@ -1197,7 +1083,7 @@ def main():
             cac_pct = value_counts_pct(flt[COL_CAC])
             donut_chart_clean(cac_pct, "category", "pct", "CAC vs direct")
 
-        two_up_or_full(ds_has, ds_chart, cac_has, cac_chart)
+        two_up_grid(ds_has, ds_chart, cac_has, cac_chart)
 
         wr_has = COL_WIN_RATE in flt.columns and not flt[COL_WIN_RATE].dropna().empty
 
@@ -1233,16 +1119,16 @@ def main():
                 max_categories=5,
             )
 
-        two_up_or_full(wr_has, wr_chart, ret_has, ret_chart)
+        two_up_grid(wr_has, wr_chart, ret_has, ret_chart)
 
-        # How companies measure partner influence beyond sourced revenue (multi-select)
+        # Influence measures
         create_section_header("Measuring partner influence beyond sourced revenue")
         influence_cols = [c for c in flt.columns if INFLUENCE_PREFIX in c]
-        if influence_cols:
-            inf_pct = multi_select_to_pct(flt, influence_cols)
+        inf_pct = multi_select_to_pct(flt, influence_cols) if influence_cols else pd.DataFrame()
 
-            def inf_chart():
-                bar_chart_from_pct(
+        if not inf_pct.empty:
+            render_chart_card(
+                lambda: bar_chart_from_pct(
                     inf_pct,
                     "category",
                     "pct",
@@ -1250,16 +1136,14 @@ def main():
                     horizontal=True,
                     max_categories=None,
                 )
-
-            render_container_if(not inf_pct.empty, inf_chart)
+            )
 
     # ======================================================
-    # STRATEGIC DIRECTION
+    # Strategic Direction
     # ======================================================
     with tab_strategy:
         create_section_header("Strategic direction")
 
-        # Primary goal vs Executive expectations – 2-up
         pg_has = COL_PRIMARY_GOAL and COL_PRIMARY_GOAL in flt.columns and not flt[COL_PRIMARY_GOAL].dropna().empty
 
         def pg_chart():
@@ -1274,9 +1158,8 @@ def main():
             ex_pct = value_counts_pct(short)
             bar_chart_from_pct(ex_pct, "category", "pct", "Executive expectations", horizontal=True)
 
-        two_up_or_full(pg_has, pg_chart, ex_has, ex_chart)
+        two_up_grid(pg_has, pg_chart, ex_has, ex_chart)
 
-        # Expected revenue vs partner focus – 2-up
         er_has = COL_EXPECTED_REV and COL_EXPECTED_REV in flt.columns and not flt[COL_EXPECTED_REV].dropna().empty
 
         def er_chart():
@@ -1306,9 +1189,8 @@ def main():
                 horizontal=True,
             )
 
-        two_up_or_full(er_has, er_chart, pf_has, pf_chart)
+        two_up_grid(er_has, er_chart, pf_has, pf_chart)
 
-        # Strategic bet vs Forecasted performance – 2-up
         sb_has = COL_STRATEGIC_BET and COL_STRATEGIC_BET in flt.columns and not flt[COL_STRATEGIC_BET].dropna().empty
 
         def sb_chart():
@@ -1333,15 +1215,14 @@ def main():
                 horizontal=True,
             )
 
-        two_up_or_full(sb_has, sb_chart, fp_has, fp_chart)
+        two_up_grid(sb_has, sb_chart, fp_has, fp_chart)
 
     # ======================================================
-    # PARTNERSHIP PORTFOLIO
+    # Partnership Portfolio
     # ======================================================
     with tab_portfolio:
         create_section_header("Partnership portfolio")
 
-        # Most impactful type vs current types – 2-up
         mi_has = COL_MOST_IMPACTFUL_TYPE and COL_MOST_IMPACTFUL_TYPE in flt.columns and not flt[COL_MOST_IMPACTFUL_TYPE].dropna().empty
 
         def mi_chart():
@@ -1361,9 +1242,8 @@ def main():
                 max_categories=None,
             )
 
-        two_up_or_full(mi_has, mi_chart, not df_part.empty, part_chart)
+        two_up_grid(mi_has, mi_chart, not df_part.empty, part_chart)
 
-        # Expansion vs total partners – 2-up
         expand_cols = [c for c in flt.columns if PARTNERSHIP_EXPAND_PREFIX in c]
         df_expand = multi_select_to_pct(flt, expand_cols) if expand_cols else pd.DataFrame()
 
@@ -1390,9 +1270,8 @@ def main():
                 max_categories=TOP_N_DEFAULT,
             )
 
-        two_up_or_full(not df_expand.empty, expand_chart, total_has, total_chart)
+        two_up_grid(not df_expand.empty, expand_chart, total_has, total_chart)
 
-        # Active partners – 2-up grid with empty cell on right
         active_has = COL_ACTIVE_PARTNERS and COL_ACTIVE_PARTNERS in flt.columns and not flt[COL_ACTIVE_PARTNERS].dropna().empty
 
         def active_chart():
@@ -1406,10 +1285,10 @@ def main():
                 max_categories=TOP_N_DEFAULT,
             )
 
-        two_up_or_full(active_has, active_chart, False, lambda: None)
+        two_up_grid(active_has, active_chart, False, lambda: None)
 
     # ======================================================
-    # CHALLENGES & RISKS
+    # Challenges & Risks
     # ======================================================
     with tab_ops:
         create_section_header("Challenges & risks")
@@ -1438,31 +1317,29 @@ def main():
                 horizontal=True,
             )
 
-        two_up_or_full(bc_has, bc_chart, mg_has, mg_chart)
+        two_up_grid(bc_has, bc_chart, mg_has, mg_chart)
 
-        # Partner satisfaction measurement (multi-select)
         sat_cols = [c for c in flt.columns if SAT_PREFIX in c]
         df_sat = multi_select_to_pct(flt, sat_cols) if sat_cols else pd.DataFrame()
 
-        def sat_chart():
-            bar_chart_from_pct(
-                df_sat,
-                "category",
-                "pct",
-                "How partner satisfaction is measured",
-                horizontal=True,
-                max_categories=None,
+        if not df_sat.empty:
+            render_chart_card(
+                lambda: bar_chart_from_pct(
+                    df_sat,
+                    "category",
+                    "pct",
+                    "How partner satisfaction is measured",
+                    horizontal=True,
+                    max_categories=None,
+                )
             )
 
-        two_up_or_full(not df_sat.empty, sat_chart, False, lambda: None)
-
     # ======================================================
-    # TEAM & INVESTMENT
+    # Team & Investment
     # ======================================================
     with tab_team:
         create_section_header("Team & investment")
 
-        # Team size vs annual budget – 2-up
         ts_has = COL_TEAM_SIZE and COL_TEAM_SIZE in flt.columns and not flt[COL_TEAM_SIZE].dropna().empty
 
         def ts_chart():
@@ -1487,16 +1364,9 @@ def main():
                 "Annual partnerships budget",
                 horizontal=True,
             )
-            st.markdown(
-                '<div class="chart-caption">'
-                "Percentages exclude respondents who selected “I don’t have this data.”"
-                "</div>",
-                unsafe_allow_html=True,
-            )
 
-        two_up_or_full(ts_has, ts_chart, bud_has, bud_chart)
+        two_up_grid(ts_has, ts_chart, bud_has, bud_chart)
 
-        # Reporting vs top-3 budget line items – 2-up
         rep_has = COL_REPORTING and COL_REPORTING in flt.columns and not flt[COL_REPORTING].dropna().empty
 
         def rep_chart():
@@ -1524,9 +1394,8 @@ def main():
                 max_categories=None,
             )
 
-        two_up_or_full(rep_has, rep_chart, not df_bud.empty, budget_items_chart)
+        two_up_grid(rep_has, rep_chart, not df_bud.empty, budget_items_chart)
 
-        # Training vs roles – 2-up
         tr_has = COL_TRAINING and COL_TRAINING in flt.columns and not flt[COL_TRAINING].dropna().empty
 
         def tr_chart():
@@ -1554,10 +1423,10 @@ def main():
                 max_categories=None,
             )
 
-        two_up_or_full(tr_has, tr_chart, not df_roles.empty, roles_chart)
+        two_up_grid(tr_has, tr_chart, not df_roles.empty, roles_chart)
 
     # ======================================================
-    # TECHNOLOGY & AI
+    # Technology & AI
     # ======================================================
     with tab_tech:
         create_section_header("Technology & AI")
@@ -1584,10 +1453,10 @@ def main():
                 "Currently using AI in the partner organization",
             )
 
-        two_up_or_full(ut_has, ut_chart, ai_has, ai_chart)
+        two_up_grid(ut_has, ut_chart, ai_has, ai_chart)
 
     # ======================================================
-    # MARKETPLACES
+    # Marketplaces
     # ======================================================
     with tab_market:
         create_section_header("Marketplaces")
@@ -1640,31 +1509,25 @@ def main():
                     "Share of revenue from marketplaces",
                     horizontal=False,
                 )
-            st.markdown(
-                '<div class="chart-caption">'
-                "No specific marketplace names are displayed."
-                "</div>",
-                unsafe_allow_html=True,
-            )
 
-        two_up_or_full(mpl_has, mpl_chart, mp_has_any, mp_chart)
+        two_up_grid(mpl_has, mpl_chart, mp_has_any, mp_chart)
 
     # ======================================================
-    # ADDITIONAL INSIGHTS
+    # Additional Insights (2x2 grid)
     # ======================================================
     with tab_extra:
         create_section_header("Additional insights across remaining questions")
 
         st.markdown(
             """
-    <div class="card-static base-card" style="margin-top:0;">
-      <p style="margin-bottom:0.5rem;">
-        This section surfaces additional multiple-choice questions that are not already covered in the main tabs.
-        Vendor-specific, numeric-only, and free-text style questions are excluded to keep the view focused on
-        interpretable categorical insights.
-      </p>
-    </div>
-    """,
+            <div class="card">
+              <p style="margin-bottom:0.5rem;">
+                This section surfaces additional multiple-choice questions that are not already covered in the main tabs.
+                Vendor-specific, numeric-only, and free-text style questions are excluded to keep the view focused on
+                interpretable categorical insights.
+              </p>
+            </div>
+            """,
             unsafe_allow_html=True,
         )
 
@@ -1682,10 +1545,6 @@ def main():
             "LocationLatitude",
             "LocationLongitude",
             "UserLanguage",
-            "Close Rates",
-            "_Close Rates",
-            "close rate",
-            "close rates",
             "Other – please specify",
             "Other - please specify",
             "additional feedback or comments you'd like to share",
@@ -1737,39 +1596,42 @@ def main():
 
         extra_questions = extra_questions[:10]
 
-        for item in extra_questions:
-            col = item["col"]
-            pct_df = item["pct"]
-            n_cat = len(pct_df)
-            tool_name = extract_platform_tool(col)
-            if tool_name:
-                title = f"{tool_name} – Which platforms do you plan to use more, less, or steady?"
-            else:
-                title = clean_question_title(col)
+        if extra_questions:
+            # 2x2 (or 2xN) grid: each row has 2 cards
+            for i in range(0, len(extra_questions), 2):
+                row = extra_questions[i : i + 2]
+                c1, c2 = st.columns(2)
+                for item, col_streamlit in zip(row, [c1, c2]):
+                    with col_streamlit:
+                        col_name = item["col"]
+                        pct_df = item["pct"]
+                        n_cat = len(pct_df)
+                        tool_name = extract_platform_tool(col_name)
+                        if tool_name:
+                            title = f"{tool_name} – Which platforms do you plan to use more, less, or steady?"
+                        else:
+                            title = clean_question_title(col_name)
 
-            st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-            if n_cat <= 5:
-                donut_chart_clean(pct_df, "category", "pct", title)
-            else:
-                bar_chart_from_pct(
-                    pct_df,
-                    "category",
-                    "pct",
-                    title,
-                    horizontal=True,
-                    max_categories=min(n_cat, TOP_N_DEFAULT),
-                )
-            if tool_name:
-                st.markdown(
-                    f"<div style='text-align:center;font-weight:600;margin-top:-6px;'>{tool_name}</div>",
-                    unsafe_allow_html=True,
-                )
-            st.markdown("</div>", unsafe_allow_html=True)
+                        def chart_fn(pct_df=pct_df, title=title, n_cat=n_cat):
+                            if n_cat <= 5:
+                                donut_chart_clean(pct_df, "category", "pct", title)
+                            else:
+                                bar_chart_from_pct(
+                                    pct_df,
+                                    "category",
+                                    "pct",
+                                    title,
+                                    horizontal=True,
+                                    max_categories=min(n_cat, TOP_N_DEFAULT),
+                                )
 
-        if not extra_questions:
-            st.info("No additional summarized categorical questions detected beyond the main dashboard sections.")
+                        render_chart_card(chart_fn)
+        else:
+            st.info(
+                "No additional summarized categorical questions detected beyond the main dashboard sections."
+            )
 
-    # ---- Footer ----
+    # ----- Footer -----
     st.markdown(
         """
         <div class="footer">
