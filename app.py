@@ -9,7 +9,6 @@ st.set_page_config(
     page_title="SOPL 2025 - Partnership Analytics",
     page_icon="PL_transparent_1080.ico",
     layout="wide",
-    initial_sidebar_state="expanded",
 )
 
 # ==================== BRAND COLORS ====================
@@ -112,26 +111,26 @@ main.block-container {
     font-weight: 400;
 }
 
-/* Logo placeholders (PL + Euler) */
+/* Logos */
 .logo-group {
     display:flex;
     align-items:center;
     gap:12px;
 }
-.logo-box {
+.logo-box-img {
     width:72px;
     height:72px;
     border-radius:16px;
-    border:1px dashed #cbd5f5;
-    background: radial-gradient(circle at 0 0, #eef2ff, #e0f2fe);
+    border:1px solid #e2e8f0;
+    background:#ffffff;
     display:flex;
-    flex-direction:column;
     align-items:center;
     justify-content:center;
-    font-size:0.7rem;
-    font-weight:600;
-    color:#64748b;
-    text-align:center;
+    padding:8px;
+}
+.logo-box-img img {
+    max-width:100%;
+    max-height:100%;
 }
 
 /* Section headers */
@@ -145,8 +144,8 @@ main.block-container {
     color: #1e293b !important;
 }
 
-/* Static cards (welcome / about) – NO hover shadow */
-.card-static {
+/* Base card design (used by welcome, about, filters, charts) */
+.base-card {
     background: var(--card);
     border-radius: 16px;
     padding: 1.5rem;
@@ -155,7 +154,12 @@ main.block-container {
     margin-bottom: 1.5rem;
 }
 
-/* Chart tiles – light border, hover shadow, animation */
+/* Static info cards (no hover shadow) */
+.card-static {
+    composes: base-card;
+}
+
+/* Chart tiles: same as base card but add hover + animation */
 .chart-container {
     background: var(--card);
     border-radius: 16px;
@@ -181,50 +185,62 @@ main.block-container {
     font-style: italic;
 }
 
-/* KPI grid (if needed) */
-.kpi-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 1.5rem;
-    margin: 1.5rem 0;
+/* Filter card */
+.filter-card {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 1.25rem 1.5rem 1.5rem 1.5rem;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 4px 10px rgba(15,23,42,0.04);
+    margin-bottom: 1.5rem;
+}
+.filter-title-row {
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-bottom:0.75rem;
+}
+.filter-title-row span {
+    font-weight:800;
+    font-size:1.05rem;
+}
+.filter-title-icon {
+    width:20px;
+    height:20px;
+    border-radius:999px;
+    border:2px solid #EC3D72;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:0.8rem;
+    color:#EC3D72;
 }
 
-/* Sidebar styling */
-[data-testid="stSidebar"] {
-    background-color: #ffffff !important;
-    border-right: 1px solid #e2e8f0;
-}
-[data-testid="stSidebar"] > div {
-    padding: 1rem 0.75rem 2rem 0.75rem;
-}
-.sidebar-title {
-    font-size: 1.05rem;
-    font-weight: 800;
-    margin-bottom: 0.5rem;
-}
-.sidebar-section-label {
-    font-size: 0.9rem;
-    font-weight: 700;
-    margin-top: 1rem;
-    margin-bottom: 0.25rem;
-}
-
-/* Make multiselect look like filter list */
-.stSidebar .stMultiSelect > div > div {
+/* Make main-page multiselects look like clean dropdowns — white bg, black text */
+.stMultiSelect > div > div {
     border-radius: 14px;
     border: 1px solid #e2e8f0;
     transition: all 0.18s ease;
-    background-color: #f9fafb;
+    background-color: #ffffff;
+    color: #020617 !important;
 }
-.stSidebar .stMultiSelect > div > div:hover {
-    border-color: #ec3d72;
-    box-shadow: 0 0 0 2px rgba(236, 61, 114, 0.20);
+.stMultiSelect > div > div:hover {
+    border-color: #3b308f;
+    box-shadow: 0 0 0 2px rgba(59, 48, 143, 0.18);
 }
-.stSidebar .stMultiSelect [data-baseweb="tag"] {
+.stMultiSelect [data-baseweb="tag"] {
     background-color: #ec3d72 !important;
     color: #ffffff !important;
     border-radius: 999px !important;
     font-weight: 600 !important;
+}
+
+/* Also style selectboxes similarly, in case we use them */
+.stSelectbox > div > div {
+    border-radius: 14px;
+    border: 1px solid #e2e8f0;
+    background-color: #ffffff;
+    color: #020617 !important;
 }
 
 /* Tabs */
@@ -298,7 +314,7 @@ main.block-container {
     display:flex;
     flex-wrap:wrap;
     gap:8px;
-    margin-top:0.75rem;
+    margin-top:0.25rem;
     margin-bottom:1.5rem;
 }
 .filter-pill {
@@ -337,9 +353,6 @@ main.block-container {
 @media (max-width: 768px) {
     .main-header {
         font-size: 2.2rem;
-    }
-    .kpi-grid {
-        grid-template-columns: 1fr;
     }
     .header-row {
         flex-direction: column;
@@ -475,10 +488,10 @@ def binned_pct_custom(series: pd.Series, edges: list[float], labels: list[str]) 
 
 def _default_label_from_col(col_name: str) -> str:
     """
-    Generic extraction:
-    - If text in quotes, use that (e.g. "Solution Partnerships")
-    - Else if ' – ' present, use text before it
-    - Else if '? ' present, use text after '? '
+    For multi-select columns:
+    - Use text in quotes if present
+    - Else use text before " – "
+    - Else use text after "? "
     - Else fall back to whole column name
     """
     if '"' in col_name:
@@ -496,20 +509,18 @@ def multi_select_to_pct(
     df: pd.DataFrame, cols: list[str], label_parser=_default_label_from_col
 ) -> pd.DataFrame:
     """
-    For a block of multi-select checkbox columns (binary 1/0),
+    For a set of multi-select checkbox columns (binary 1/0),
     compute percentage of respondents who selected each option.
     """
     if not cols:
         return pd.DataFrame(columns=["category", "pct"])
 
     sub = df[cols].apply(pd.to_numeric, errors="coerce")
-    # respondents who answered at least one option in this block
     n_resp = sub.notna().any(axis=1).sum()
     if n_resp == 0:
         return pd.DataFrame(columns=["category", "pct"])
 
     counts = sub.sum(skipna=True)
-
     out = counts.reset_index()
     out.columns = ["col", "count"]
     out["category"] = out["col"].apply(label_parser)
@@ -793,7 +804,7 @@ def render_filter_pills(selected_regions, selected_revenue, selected_employees):
 def main():
     st.markdown('<div class="app-wrapper">', unsafe_allow_html=True)
 
-    # ---- Header ----
+    # ---- Header with logos ----
     st.markdown(
         """
     <div class="header-row">
@@ -802,12 +813,12 @@ def main():
         <div class="sub-header">Strategic Insights Dashboard • Partnership Performance Analytics</div>
       </div>
       <div class="logo-group">
-        <div class="logo-box">
-          PL<br/>Logo
+        <div class="logo-box-img">
+          <img src="PL Logo.png" alt="Partnership Leaders Logo"/>
         </div>
-        <div class="logo-box">
-          Euler<br/>Logo
-        </div>
+        <a href="https://eulerapp.com/" target="_blank" class="logo-box-img" style="text-decoration:none;">
+          <img src="Euler logo.png" alt="Euler Logo"/>
+        </a>
       </div>
     </div>
     """,
@@ -817,7 +828,7 @@ def main():
     # ---- Introduction ----
     st.markdown(
         """
-<div class="card-static" style="margin-top:0;">
+<div class="card-static base-card" style="margin-top:0;">
   <p><strong>Welcome to the State of Partnership Leaders 2025 Dashboard.</strong></p>
   <p>
   In prior years, we have released a 40+ page document with all of the data but with the advancements in AI adoption,
@@ -831,7 +842,7 @@ def main():
     </li>
     <li>
       <strong>SOPL Data Dashboard</strong> – You will find all of the data from the report in an interactive dashboard below.
-      Use the filters on the left to customize the data to your interests and the Performance and Partner Impact related tabs to navigate the main themes.
+      Use the filters to customize the data to your interests and the Performance and Partner Impact related tabs to navigate the main themes.
     </li>
   </ul>
 </div>
@@ -890,7 +901,6 @@ def main():
     COL_SALES_CYCLE = "How does your partner-led sales cycle compare to your direct sales cycle?"
     COL_WIN_RATE = "What’s your win rate for deals where partners are involved?"
 
-    # flexible column detection
     COL_PRIMARY_GOAL = find_col(df, substrings=["main goal for partnerships in the next 12 months"])
     COL_EXEC_EXPECT = find_col(df, substrings=["executive teams expectations of partnerships", "executive team’s expectations of partnerships"])
     COL_EXPECTED_REV = find_col(df, substrings=["expected to come from partnerships in the next 12 months"])
@@ -928,88 +938,97 @@ def main():
     else:
         df["RegionStd"] = None
 
-    # ---- Sidebar filters ----
-    st.sidebar.markdown("<div class='sidebar-title'>Filters</div>", unsafe_allow_html=True)
-    st.sidebar.markdown("<span style='font-size:0.8rem;color:#94a3b8;'>Use All options to reset, or select specific bands to customize.</span>", unsafe_allow_html=True)
-
-    # Region filter with "All Regions" sentinel but multi-select
-    selected_regions_clean = None
-    if "RegionStd" in df.columns:
-        region_options = sorted(df["RegionStd"].dropna().unique().tolist())
-        sentinel_region = "All Regions"
-        region_display_options = [sentinel_region] + region_options
-        st.sidebar.markdown("<div class='sidebar-section-label'>Region</div>", unsafe_allow_html=True)
-        selected_regions_raw = st.sidebar.multiselect(
-            " ",
-            region_display_options,
-            [sentinel_region],
-            label_visibility="collapsed",
+    # ---- Filters card (no sidebar) ----
+    with st.container():
+        st.markdown('<div class="filter-card">', unsafe_allow_html=True)
+        st.markdown(
+            """
+            <div class="filter-title-row">
+              <div class="filter-title-icon">⧉</div>
+              <span>Filters</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
-        if sentinel_region in selected_regions_raw or not selected_regions_raw:
-            selected_regions_clean = None
-        else:
-            selected_regions_clean = selected_regions_raw
-    else:
+        col_f1, col_f2, col_f3 = st.columns(3)
+
+        # Region filter
         selected_regions_clean = None
+        with col_f1:
+            if "RegionStd" in df.columns:
+                region_options = sorted(df["RegionStd"].dropna().unique().tolist())
+                sentinel_region = "All Regions"
+                region_display_options = [sentinel_region] + region_options
+                selected_regions_raw = st.multiselect(
+                    "Region",
+                    region_display_options,
+                    [sentinel_region],
+                )
+                if sentinel_region in selected_regions_raw or not selected_regions_raw:
+                    selected_regions_clean = None
+                else:
+                    selected_regions_clean = selected_regions_raw
+            else:
+                selected_regions_clean = None
 
-    # Revenue filter
-    selected_revenue_clean = None
-    if COL_REVENUE in df.columns:
-        revenue_options = df[COL_REVENUE].dropna().unique().tolist()
-        revenue_order = [
-            "Less than $50 million",
-            "$50M – $250M",
-            "$250M – $1B",
-            "$1B – $10B",
-            "More than $10B",
-        ]
-        ordered_revenue = [r for r in revenue_order if r in revenue_options] + [
-            r for r in revenue_options if r not in revenue_order
-        ]
-        sentinel_rev = "All Revenue Bands"
-        revenue_display_options = [sentinel_rev] + ordered_revenue
-        st.sidebar.markdown("<div class='sidebar-section-label'>Annual Revenue</div>", unsafe_allow_html=True)
-        selected_revenue_raw = st.sidebar.multiselect(
-            "  ",
-            revenue_display_options,
-            [sentinel_rev],
-            label_visibility="collapsed",
-        )
-        if sentinel_rev in selected_revenue_raw or not selected_revenue_raw:
-            selected_revenue_clean = None
-        else:
-            selected_revenue_clean = selected_revenue_raw
-    else:
+        # Revenue filter
         selected_revenue_clean = None
+        with col_f2:
+            if COL_REVENUE in df.columns:
+                revenue_options = df[COL_REVENUE].dropna().unique().tolist()
+                revenue_order = [
+                    "Less than $50 million",
+                    "$50M – $250M",
+                    "$250M – $1B",
+                    "$1B – $10B",
+                    "More than $10B",
+                ]
+                ordered_revenue = [r for r in revenue_order if r in revenue_options] + [
+                    r for r in revenue_options if r not in revenue_order
+                ]
+                sentinel_rev = "All Revenue Bands"
+                revenue_display_options = [sentinel_rev] + ordered_revenue
+                selected_revenue_raw = st.multiselect(
+                    "Annual Revenue",
+                    revenue_display_options,
+                    [sentinel_rev],
+                )
+                if sentinel_rev in selected_revenue_raw or not selected_revenue_raw:
+                    selected_revenue_clean = None
+                else:
+                    selected_revenue_clean = selected_revenue_raw
+            else:
+                selected_revenue_clean = None
 
-    # Employees filter
-    selected_employees_clean = None
-    if COL_EMPLOYEES in df.columns:
-        emp_options = df[COL_EMPLOYEES].dropna().unique().tolist()
-        emp_order = [
-            "Less than 100 employees",
-            "100 – 500 employees",
-            "501 – 5,000 employees",
-            "More than 5,000 employees",
-        ]
-        ordered_emp = [e for e in emp_order if e in emp_options] + [
-            e for e in emp_options if e not in emp_order
-        ]
-        sentinel_emp = "All Sizes"
-        emp_display_options = [sentinel_emp] + ordered_emp
-        st.sidebar.markdown("<div class='sidebar-section-label'>Total Employees</div>", unsafe_allow_html=True)
-        selected_employees_raw = st.sidebar.multiselect(
-            "   ",
-            emp_display_options,
-            [sentinel_emp],
-            label_visibility="collapsed",
-        )
-        if sentinel_emp in selected_employees_raw or not selected_employees_raw:
-            selected_employees_clean = None
-        else:
-            selected_employees_clean = selected_employees_raw
-    else:
+        # Employees filter
         selected_employees_clean = None
+        with col_f3:
+            if COL_EMPLOYEES in df.columns:
+                emp_options = df[COL_EMPLOYEES].dropna().unique().tolist()
+                emp_order = [
+                    "Less than 100 employees",
+                    "100 – 500 employees",
+                    "501 – 5,000 employees",
+                    "More than 5,000 employees",
+                ]
+                ordered_emp = [e for e in emp_order if e in emp_options] + [
+                    e for e in emp_options if e not in emp_order
+                ]
+                sentinel_emp = "All Sizes"
+                emp_display_options = [sentinel_emp] + ordered_emp
+                selected_employees_raw = st.multiselect(
+                    "Total Employees",
+                    emp_display_options,
+                    [sentinel_emp],
+                )
+                if sentinel_emp in selected_employees_raw or not selected_employees_raw:
+                    selected_employees_clean = None
+                else:
+                    selected_employees_clean = selected_employees_raw
+            else:
+                selected_employees_clean = None
+
+        st.markdown("</div>", unsafe_allow_html=True)
 
     # Apply filters
     flt = df.copy()
@@ -1027,7 +1046,7 @@ def main():
     create_section_header("About this dashboard and dataset")
     st.markdown(
         """
-    <div class="card-static" style="margin-top:0;">
+    <div class="card-static base-card" style="margin-top:0;">
       <p>
       Respondents represent organizations from four key regions, namely North America (NA),
       Europe the Middle East and Africa (EMEA), Asia Pacific (APAC), and Latin America (LATAM),
@@ -1037,7 +1056,7 @@ def main():
       and industries.
       </p>
       <p style="margin-top:0.5rem;">
-      Use the filters on the left (Region, Annual Revenue, Total Employees) to narrow the view;
+      Use the filters above (Region, Annual Revenue, Total Employees) to narrow the view;
       the charts in every tab update automatically to reflect the current selection.
       </p>
     </div>
@@ -1082,7 +1101,7 @@ def main():
         if c is not None
     }
 
-    # Multi-select blocks to exclude from "Additional insights"
+    # Exclude multi-select blocks from Additional Insights
     for col in df.columns:
         if (
             INFLUENCE_PREFIX in col
@@ -1164,7 +1183,7 @@ def main():
     # PERFORMANCE
     # ======================================================
     with tab_perf:
-        create_section_header("Partner Impact & Performance")
+        create_section_header("Partner impact & performance")
 
         ds_has = COL_DEAL_SIZE in flt.columns and not flt[COL_DEAL_SIZE].dropna().empty
 
@@ -1250,7 +1269,6 @@ def main():
         ex_has = COL_EXEC_EXPECT and COL_EXEC_EXPECT in flt.columns and not flt[COL_EXEC_EXPECT].dropna().empty
 
         def ex_chart():
-            # shorten labels: use word before " - "
             s = flt[COL_EXEC_EXPECT].dropna().astype(str)
             short = s.str.split(" - ", n=1).str[0]
             ex_pct = value_counts_pct(short)
@@ -1374,7 +1392,7 @@ def main():
 
         two_up_or_full(not df_expand.empty, expand_chart, total_has, total_chart)
 
-        # Active partners – single row but still in grid with empty second col
+        # Active partners – 2-up grid with empty cell on right
         active_has = COL_ACTIVE_PARTNERS and COL_ACTIVE_PARTNERS in flt.columns and not flt[COL_ACTIVE_PARTNERS].dropna().empty
 
         def active_chart():
@@ -1639,7 +1657,7 @@ def main():
 
         st.markdown(
             """
-    <div class="card-static" style="margin-top:0;">
+    <div class="card-static base-card" style="margin-top:0;">
       <p style="margin-bottom:0.5rem;">
         This section surfaces additional multiple-choice questions that are not already covered in the main tabs.
         Vendor-specific, numeric-only, and free-text style questions are excluded to keep the view focused on
@@ -1729,29 +1747,24 @@ def main():
             else:
                 title = clean_question_title(col)
 
-            def make_chart(pct_df=pct_df, title=title, tool_name=tool_name, n_cat=n_cat):
-                st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-                if n_cat <= 5:
-                    donut_chart_clean(pct_df, "category", "pct", title)
-                else:
-                    bar_chart_from_pct(
-                        pct_df,
-                        "category",
-                        "pct",
-                        title,
-                        horizontal=True,
-                        max_categories=min(n_cat, TOP_N_DEFAULT),
-                    )
-                if tool_name:
-                    st.markdown(
-                        f"<div style='text-align:center;font-weight:600;margin-top:-6px;'>"
-                        f"{tool_name}"
-                        f"</div>",
-                        unsafe_allow_html=True,
-                    )
-                st.markdown("</div>", unsafe_allow_html=True)
-
-            make_chart()
+            st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+            if n_cat <= 5:
+                donut_chart_clean(pct_df, "category", "pct", title)
+            else:
+                bar_chart_from_pct(
+                    pct_df,
+                    "category",
+                    "pct",
+                    title,
+                    horizontal=True,
+                    max_categories=min(n_cat, TOP_N_DEFAULT),
+                )
+            if tool_name:
+                st.markdown(
+                    f"<div style='text-align:center;font-weight:600;margin-top:-6px;'>{tool_name}</div>",
+                    unsafe_allow_html=True,
+                )
+            st.markdown("</div>", unsafe_allow_html=True)
 
         if not extra_questions:
             st.info("No additional summarized categorical questions detected beyond the main dashboard sections.")
