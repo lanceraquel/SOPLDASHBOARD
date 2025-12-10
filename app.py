@@ -9,7 +9,7 @@ st.set_page_config(
     page_title="SOPL 2025 - Partnership Analytics",
     page_icon="PL_transparent_1080.ico",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",  # no sidebar
 )
 
 # ==================== BRAND COLORS ====================
@@ -17,28 +17,23 @@ PL_CORE = {
     "amaranth": "#EC3D72",
     "casablanca": "#F9A644",
     "minsk": "#3B308F",
-    "cerulean": "#00CCFD",
 }
 PL_TINTS = {
     "amaranth_light": "#F25A8A",
     "casablanca_light": "#FBB85F",
     "minsk_light": "#5146A1",
-    "cerulean_light": "#33D6FF",
 }
 
 PL_COLORS = [
     PL_CORE["minsk"],
     PL_CORE["amaranth"],
     PL_CORE["casablanca"],
-    PL_CORE["cerulean"],
     PL_TINTS["minsk_light"],
     PL_TINTS["amaranth_light"],
     PL_TINTS["casablanca_light"],
-    PL_TINTS["cerulean_light"],
 ]
 
 TOP_N_DEFAULT = 4  # default max categories per chart
-
 
 # ==================== ENHANCED CSS / LIGHT THEME ====================
 st.markdown(
@@ -55,14 +50,8 @@ main.block-container {
     background-color: #ffffff !important;
     padding-top: 1rem;
 }
-[data-testid="stSidebar"] {
-    background-color: #0b1120 !important;
-    border-right: 1px solid #1e293b;
-}
-[data-testid="stSidebar"] .stSelectbox,
-[data-testid="stSidebar"] .stMultiSelect {
-    margin-bottom: 1rem;
-}
+
+/* Design tokens */
 :root {
     --bg: #ffffff;
     --panel: #ffffff;
@@ -75,11 +64,17 @@ main.block-container {
     --danger: #ef4444;
     --glass: rgba(15,23,42,0.04);
 }
+
+/* App wrapper */
 .app-wrapper {
     background: var(--bg);
     padding: 18px 24px 40px 24px;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    max-width: 1400px;
+    margin: 0 auto;
 }
+
+/* Header */
 .header-row {
     display:flex;
     align-items:flex-start;
@@ -115,6 +110,30 @@ main.block-container {
     margin-top: 8px;
     font-weight: 400;
 }
+
+/* Logo placeholders (PL + Euler) */
+.logo-group {
+    display:flex;
+    align-items:center;
+    gap:12px;
+}
+.logo-box {
+    width:72px;
+    height:72px;
+    border-radius:16px;
+    border:1px dashed #cbd5f5;
+    background: radial-gradient(circle at 0 0, #eef2ff, #e0f2fe);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    font-size:0.7rem;
+    font-weight:600;
+    color:#64748b;
+    text-align:center;
+}
+
+/* Section headers */
 .section-header {
     font-size: 1.3rem;
     font-weight: 700;
@@ -124,12 +143,8 @@ main.block-container {
     border-bottom: 2px solid #f1f5f9;
     color: #1e293b !important;
 }
-.chart-caption {
-    font-size: 0.85rem;
-    color: var(--muted) !important;
-    margin-top: 8px;
-    font-style: italic;
-}
+
+/* Chart tiles */
 .chart-container {
     background: white;
     border-radius: 12px;
@@ -137,13 +152,31 @@ main.block-container {
     border: 1px solid #e2e8f0;
     box-shadow: 0 2px 8px rgba(15,23,42,0.03);
     margin-bottom: 1.5rem;
+    opacity: 0;
+    animation: fadeInUp 0.35s ease-out forwards;
+    transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
 }
+.chart-container:hover {
+    box-shadow: 0 12px 28px rgba(15,23,42,0.14);
+    transform: translateY(-2px);
+    border-color: #cbd5f5;
+}
+.chart-caption {
+    font-size: 0.85rem;
+    color: var(--muted) !important;
+    margin-top: 8px;
+    font-style: italic;
+}
+
+/* KPI grid (if you add any later) */
 .kpi-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
     gap: 1.5rem;
     margin: 1.5rem 0;
 }
+
+/* Filter styling (global selects) */
 .stSelectbox > div > div,
 .stMultiSelect > div > div {
     border-radius: 10px;
@@ -163,6 +196,23 @@ main.block-container {
     border-radius: 999px !important;
     font-weight: 600 !important;
 }
+
+/* Filter panel (top, no sidebar) */
+.filter-panel-title {
+    font-size: 1.0rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #64748b;
+    margin-bottom: 0.25rem;
+}
+.filter-panel-subtitle {
+    font-size: 0.9rem;
+    color: #94a3b8;
+    margin-bottom: 0.5rem;
+}
+
+/* Tabs */
 .stTabs [data-baseweb="tab-list"] {
     gap: 8px;
     background-color: #020617;
@@ -198,6 +248,8 @@ main.block-container {
     background-color: transparent;
     color: #e5e7eb !important;
 }
+
+/* Vega / Altair */
 .vega-embed .vega-actions {
     background: #ffffff !important;
     border: 1px solid #e2e8f0 !important;
@@ -225,21 +277,8 @@ main.block-container {
 .vega-embed text {
     font-size: 11px;
 }
-.footer {
-    text-align: center;
-    color: #64748b !important;
-    font-size: 0.9rem;
-    margin-top: 3rem;
-    padding-top: 1.5rem;
-    border-top: 1px solid #e2e8f0;
-}
-.assistant-header {
-    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-    border-radius: 12px;
-    padding: 1.25rem 1.5rem;
-    margin: 1.5rem 0 1rem 0;
-    border: 1px solid #e2e8f0;
-}
+
+/* Filter pills under header */
 .filter-pill-row {
     display:flex;
     flex-wrap:wrap;
@@ -259,6 +298,27 @@ main.block-container {
     font-weight:400;
     opacity:0.8;
 }
+
+/* Assistant header */
+.assistant-header {
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    margin: 1.5rem 0 1rem 0;
+    border: 1px solid #e2e8f0;
+}
+
+/* Footer */
+.footer {
+    text-align: center;
+    color: #64748b !important;
+    font-size: 0.9rem;
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #e2e8f0;
+}
+
+/* Small screens */
 @media (max-width: 768px) {
     .main-header {
         font-size: 2.2rem;
@@ -266,7 +326,21 @@ main.block-container {
     .kpi-grid {
         grid-template-columns: 1fr;
     }
+    .header-row {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .logo-group {
+        margin-top: 0.75rem;
+    }
 }
+
+/* Fade-in animation for chart tiles */
+@keyframes fadeInUp {
+    from { opacity:0; transform: translateY(4px); }
+    to   { opacity:1; transform: translateY(0); }
+}
+
 /* Kill empty rectangles */
 .chart-container:empty {
     display: none !important;
@@ -298,10 +372,10 @@ def atlas_light_theme():
                 "labelColor": "#475569",
                 "titleColor": "#020617",
                 "titleFontWeight": 600,
-                "labelFontWeight": 600,  # Bold axis labels
+                "labelFontWeight": 600,
                 "gridColor": "#f1f5f9",
                 "domainColor": "#d4d4d8",
-                "labelLimit": 0,  # prevent truncation
+                "labelLimit": 0,
                 "labelFontSize": 11,
                 "titleFontSize": 12,
             },
@@ -337,7 +411,10 @@ alt.renderers.set_embed_options(
 # ==================== DATA LOADER ====================
 @st.cache_data(show_spinner=True)
 def load_data() -> pd.DataFrame:
-    """Load survey data from Google Sheets exported as CSV. The URL should be set in Streamlit secrets."""
+    """
+    Load survey data from Google Sheets exported as CSV.
+    The URL should be set in Streamlit secrets as gsheet_url.
+    """
     url = st.secrets.get("gsheet_url", None)
     if not url:
         st.error(
@@ -378,6 +455,35 @@ def binned_pct_custom(series: pd.Series, edges: list[float], labels: list[str]) 
     binned = pd.cut(s, bins=edges, labels=labels, include_lowest=True, right=False)
     pct_df = value_counts_pct(binned).rename(columns={"category": "bin"})
     return pct_df
+
+
+def multi_select_to_pct(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
+    """
+    For a block of multi-select checkbox columns (binary 1/0),
+    compute percentage of respondents who selected each option.
+    """
+    if not cols:
+        return pd.DataFrame(columns=["category", "pct"])
+
+    sub = df[cols].apply(pd.to_numeric, errors="coerce")
+    # respondents who answered at least one option in this block
+    n_resp = sub.notna().any(axis=1).sum()
+    if n_resp == 0:
+        return pd.DataFrame(columns=["category", "pct"])
+
+    counts = sub.sum(skipna=True)
+
+    def extract_label(col_name: str) -> str:
+        # Text after "? " becomes the category; fallback to full column name
+        if "? " in col_name:
+            return col_name.split("? ", 1)[1].strip()
+        return col_name
+
+    out = counts.reset_index()
+    out.columns = ["col", "count"]
+    out["category"] = out["col"].apply(extract_label)
+    out["pct"] = (out["count"] / n_resp) * 100.0
+    return out[["category", "pct"]].sort_values("pct", ascending=False)
 
 
 def create_section_header(title: str):
@@ -438,19 +544,13 @@ def bar_chart_from_pct(
         return
 
     data["PercentLabel"] = data["Percent"].map(lambda v: f"{v:.1f}%")
-    max_percent = data["Percent"].max()
-    # Let Altair automatically determine the domain for the axis so that bars don't always extend to 100%
-    domain_max = None
 
     if horizontal:
-        # If domain_max is None, let Altair choose the domain automatically
-        scale_x = alt.Scale(domain=[0, domain_max]) if domain_max is not None else alt.Scale()
         base = alt.Chart(data).encode(
             x=alt.X(
                 "Percent:Q",
                 title="Share of respondents (%)",
                 axis=alt.Axis(format=".0f", grid=True, gridColor="#f1f5f9"),
-                scale=scale_x,
             ),
             y=alt.Y(
                 f"{cat_field}:N",
@@ -483,7 +583,6 @@ def bar_chart_from_pct(
             title=alt.TitleParams(title, fontSize=16, fontWeight=700, anchor="start"),
         ).configure_axisY(labelPadding=8)
     else:
-        scale_y = alt.Scale(domain=[0, domain_max]) if domain_max is not None else alt.Scale()
         base = alt.Chart(data).encode(
             x=alt.X(
                 f"{cat_field}:N",
@@ -495,7 +594,6 @@ def bar_chart_from_pct(
                 "Percent:Q",
                 title="Share of respondents (%)",
                 axis=alt.Axis(format=".0f", grid=True, gridColor="#f1f5f9"),
-                scale=scale_y,
             ),
             color=alt.Color(
                 f"{cat_field}:N",
@@ -663,6 +761,14 @@ def main():
         <div class="main-header">STATE OF PARTNERSHIP LEADERS 2025</div>
         <div class="sub-header">Strategic Insights Dashboard • Partnership Performance Analytics</div>
       </div>
+      <div class="logo-group">
+        <div class="logo-box">
+          PL<br/>Logo
+        </div>
+        <div class="logo-box">
+          Euler<br/>Logo
+        </div>
+      </div>
     </div>
     """,
         unsafe_allow_html=True,
@@ -672,18 +778,20 @@ def main():
     st.markdown(
         """
 <div class="chart-container" style="margin-top:0;">
+  <p><strong>Welcome to the State of Partnership Leaders 2025 Dashboard.</strong></p>
   <p>
-  Welcome to the State of Partnership Leaders 2025 dashboard. In prior years, we have released a 40+ page document with all of the data but with the advancements in AI adoption, we are trying something new.
+  In prior years, we have released a 40+ page document with all of the data but with the advancements in AI adoption,
+  we are trying something new.
   </p>
   <p><strong>Below you will find:</strong></p>
   <ul>
     <li>
-      <strong>PartnerOps Agent</strong> - An AI agent trained on the SOPL dataset - think of it as your Partner Operations collaborator as you review the data.
+      <strong>PartnerOps Agent</strong> – An AI agent trained on the SOPL dataset – think of it as your Partner Operations collaborator as you review the data.
       You can ask it questions about the data or about your own strategy, we will not collect any of your inputed data.
     </li>
     <li>
-      <strong>SOPL Data Dashboard</strong> - You will find all of the data from the report in an interactive dashboard below.
-      Use the filters on the left to customize the data to your interests and the Performance, and Partner Impact tabs to navigate the main themes.
+      <strong>SOPL Data Dashboard</strong> – You will find all of the data from the report in an interactive dashboard below.
+      Use the filters above to customize the data to your interests and the Performance and Partner Impact related tabs to navigate the main themes.
     </li>
   </ul>
 </div>
@@ -695,7 +803,7 @@ def main():
     st.markdown(
         """
         <div class="assistant-header">
-            <h2 style='color:#020617; margin:0;'>Assistant (SOPL Q&amp;A)</h2>
+            <h2 style='color:#020617; margin:0;'>PartnerOps Agent (SOPL Q&amp;A)</h2>
             <p style='color:#64748b; margin:0.5rem 0 0 0;'>
                 Ask questions about the SOPL dataset, methodology, or what you are seeing in the dashboard.
             </p>
@@ -704,7 +812,7 @@ def main():
         unsafe_allow_html=True,
     )
 
-    # embed pickaxe widget (if required; else could be removed)
+    # embed pickaxe widget
     pickaxe_html = """
     <div id="deployment-5870ff7d-8fcf-4395-976b-9e9fdefbb0ff" style="width:100%; max-width:1200px; margin:0 auto;"></div>
     <script src="https://studio.pickaxe.co/api/embed/bundle.js" defer></script>
@@ -714,30 +822,36 @@ def main():
     # ---- Load data ----
     df = load_data()
     if df.empty:
+        st.markdown("</div>", unsafe_allow_html=True)
         st.stop()
 
     # ---- Column names ----
     COL_REGION = "Please select the region where your company is headquartered."
     COL_INDUSTRY = "What industry sector does your company operate in?"
-    # Attempt to find the revenue and employee columns using flexible matching so that minor punctuation
-    # differences (e.g., curly apostrophes) won't prevent the filters from appearing. The `find_col`
-    # helper returns the first matching column if found.
     COL_REVENUE = find_col(
         df,
         exact="What is your companys estimated annual revenue?",
-        substrings=["estimated annual revenue", "annual revenue", "company's estimated annual revenue", "company’s estimated annual revenue"],
+        substrings=[
+            "company’s estimated annual revenue",
+            "company's estimated annual revenue",
+            "estimated annual revenue",
+        ],
     )
     COL_EMPLOYEES = find_col(
         df,
         exact="What is your companys total number of employees?",
-        substrings=["total number of employees", "total employees"],
+        substrings=[
+            "total number of employees",
+            "company’s total number of employees",
+            "company's total number of employees",
+        ],
     )
     COL_DEAL_SIZE = "How does your average deal size involving partners compare to direct or non-partner deals?"
     COL_CAC = "How does your customer acquisition cost (CAC) from partners compared to direct sales and marketing?"
     COL_SALES_CYCLE = "How does your partner-led sales cycle compare to your direct sales cycle?"
-    COL_WIN_RATE = "What’s your win rate for deals where partners are involved?"  # partner-influenced
+    COL_WIN_RATE = "What’s your win rate for deals where partners are involved?"
 
-    # dynamic column detection for optional fields
+    # flexible column detection
     COL_PRIMARY_GOAL = find_col(df, substrings=["main goal for partnerships in the next 12 months"])
     COL_EXEC_EXPECT = find_col(df, substrings=["executive teams expectations of partnerships", "executive team’s expectations of partnerships"])
     COL_EXPECTED_REV = find_col(df, substrings=["expected to come from partnerships in the next 12 months"])
@@ -754,18 +868,18 @@ def main():
     COL_PARTNER_FOCUS = find_col(df, substrings=["focus next 12 months"])
     COL_STRATEGIC_BET = find_col(df, substrings=["Strategic bet", "strategic bet next 12 months"])
     COL_FORECAST_PERF = find_col(df, substrings=["Forecasted performance", "forecasting your performance"])
+    COL_REPORTING = find_col(df, substrings=["report to", "majority of your partner organization report"])
+    COL_TRAINING = find_col(df, substrings=["level of training", "training or enablement"])
 
-    # Additional portfolio-related metrics (exact names from dataset)
     COL_TOTAL_PARTNERS = "How many total partners do you have?"
     COL_ACTIVE_PARTNERS = "How many active partners generated revenue in the last 12 months?"
-    COL_TIME_TO_REVENUE = "How long does it typically take for a partnership to generate revenue after the first meeting?"
 
-    # Additional fields from updated dataset
-    COL_REPORTING = find_col(df, substrings=["report to", "majority of your partner organization report"])
+    # Multi-select prefixes
+    INFLUENCE_PREFIX = "Besides Sourced Revenue, how else does your company measure"
+    PARTNERSHIP_HAVE_PREFIX = "Which of the following Partnership types"
+    PARTNERSHIP_EXPAND_PREFIX = "Which partnership types are you planning to expand"
+    ROLES_PREFIX = "What roles exist on your Partner Team?"
     COL_TOP3_BUDGET_PREFIX = "What are the top 3 budget line items for your Partnerships organization, excluding headcount?"
-    # training / enablement
-    COL_TRAINING = find_col(df, substrings=["level of training", "training or enablement"])
-    # partner satisfaction measurement (multi-select)
     SAT_PREFIX = "How do you measure partner satisfaction?"
 
     # RegionStd helper
@@ -775,15 +889,32 @@ def main():
     else:
         df["RegionStd"] = None
 
-    # ---- Sidebar filters ----
-    st.sidebar.header("Filters")
+    # ---- Filters (top, no sidebar) ----
+    st.markdown(
+        """
+        <div class="filter-panel-title">Filters</div>
+        <p class="filter-panel-subtitle">
+            Adjust Region, Annual revenue band, and Total employees to customize the view. All tabs and charts update automatically.
+        </p>
+        """,
+        unsafe_allow_html=True,
+    )
 
+    col_f1, col_f2, col_f3 = st.columns(3)
+
+    # Region filter
     if "RegionStd" in df.columns:
         region_options = sorted(df["RegionStd"].dropna().unique().tolist())
-        selected_regions = st.sidebar.multiselect("Region (HQ)", region_options, region_options)
+        with col_f1:
+            selected_regions = st.multiselect(
+                "Region (HQ)",
+                region_options,
+                region_options,
+            )
     else:
         selected_regions = None
 
+    # Revenue filter
     if COL_REVENUE in df.columns:
         revenue_options = df[COL_REVENUE].dropna().unique().tolist()
         revenue_order = [
@@ -796,10 +927,16 @@ def main():
         ordered_revenue = [r for r in revenue_order if r in revenue_options] + [
             r for r in revenue_options if r not in revenue_order
         ]
-        selected_revenue = st.sidebar.multiselect("Annual revenue band", ordered_revenue, ordered_revenue)
+        with col_f2:
+            selected_revenue = st.multiselect(
+                "Annual revenue band",
+                ordered_revenue,
+                ordered_revenue,
+            )
     else:
         selected_revenue = None
 
+    # Employees filter
     if COL_EMPLOYEES in df.columns:
         emp_options = df[COL_EMPLOYEES].dropna().unique().tolist()
         emp_order = [
@@ -811,19 +948,25 @@ def main():
         ordered_emp = [e for e in emp_order if e in emp_options] + [
             e for e in emp_options if e not in emp_order
         ]
-        selected_employees = st.sidebar.multiselect("Total employees", ordered_emp, ordered_emp)
+        with col_f3:
+            selected_employees = st.multiselect(
+                "Total employees",
+                ordered_emp,
+                ordered_emp,
+            )
     else:
         selected_employees = None
 
+    # Apply filters
     flt = df.copy()
     if selected_regions:
         flt = flt[flt["RegionStd"].isin(selected_regions)]
-    if selected_revenue:
+    if selected_revenue and COL_REVENUE in flt.columns:
         flt = flt[flt[COL_REVENUE].isin(selected_revenue)]
-    if selected_employees:
+    if selected_employees and COL_EMPLOYEES in flt.columns:
         flt = flt[flt[COL_EMPLOYEES].isin(selected_employees)]
 
-    # ---- Filter summary pills ----
+    # Filter summary pills
     render_filter_pills(selected_regions, selected_revenue, selected_employees)
 
     # ---- About section ----
@@ -840,7 +983,7 @@ def main():
       and industries.
       </p>
       <p style="margin-top:0.5rem;">
-      Use the filters on the left (Region, Annual revenue band, Total employees) to narrow the view;
+      Use the filters above (Region, Annual revenue band, Total employees) to narrow the view;
       the charts in every tab update automatically to reflect the current selection.
       </p>
     </div>
@@ -880,23 +1023,22 @@ def main():
             COL_TRAINING,
             COL_TOTAL_PARTNERS,
             COL_ACTIVE_PARTNERS,
-            COL_TIME_TO_REVENUE,
             "RegionStd",
         ]
         if c is not None
     }
 
-    # Also exclude individual columns used for partnership type summaries from additional insights
-    partnership_have_cols = [
-        col for col in df.columns
-        if "Which of the following Partnership types does your company have?" in col
-    ]
-    partnership_expand_cols = [
-        col for col in df.columns
-        if "which partnership types are you planning to expand" in col.lower()
-    ]
-    for col in partnership_have_cols + partnership_expand_cols:
-        used_cols.add(col)
+    # Multi-select blocks to exclude from "Additional insights"
+    for col in df.columns:
+        if (
+            INFLUENCE_PREFIX in col
+            or PARTNERSHIP_HAVE_PREFIX in col
+            or PARTNERSHIP_EXPAND_PREFIX in col
+            or ROLES_PREFIX in col
+            or COL_TOP3_BUDGET_PREFIX in col
+            or SAT_PREFIX in col
+        ):
+            used_cols.add(col)
 
     # ---- Tabs ----
     tab_firmo, tab_perf, tab_strategy, tab_portfolio, tab_ops, tab_team, tab_tech, tab_market, tab_extra = st.tabs(
@@ -984,6 +1126,25 @@ def main():
 
         two_up_or_full(ds_has, ds_chart, cac_has, cac_chart)
 
+        # New: how companies measure partner influence beyond sourced revenue (multi-select)
+        create_section_header("Measuring partner influence beyond sourced revenue")
+        influence_cols = [c for c in flt.columns if INFLUENCE_PREFIX in c]
+        if influence_cols:
+            inf_pct = multi_select_to_pct(flt, influence_cols)
+            inf_has = not inf_pct.empty
+
+            def inf_chart():
+                bar_chart_from_pct(
+                    inf_pct,
+                    "category",
+                    "pct",
+                    "Partner influence impact measures (beyond sourced revenue)",
+                    horizontal=True,
+                    max_categories=None,
+                )
+
+            render_container_if(inf_has, inf_chart)
+
         create_section_header("Sales cycle and win rate")
 
         sc_has = COL_SALES_CYCLE in flt.columns and not flt[COL_SALES_CYCLE].dropna().empty
@@ -992,7 +1153,6 @@ def main():
             sc_pct = value_counts_pct(flt[COL_SALES_CYCLE])
             bar_chart_from_pct(sc_pct, "category", "pct", "Partner-led sales cycle vs direct", horizontal=True)
 
-        # existing win rate chart using binned values from general dataset; partner-influenced deals
         wr_has = COL_WIN_RATE in flt.columns and not flt[COL_WIN_RATE].dropna().empty
 
         def wr_chart():
@@ -1017,8 +1177,6 @@ def main():
             )
 
         two_up_or_full(sc_has, sc_chart, wr_has, wr_chart)
-
-        # Note: the win rate section above already displays the partner-influenced win rate, so we avoid duplicating the same chart.
 
         # Retention of partner-referred customers
         create_section_header("Retention of partner-referred customers")
@@ -1154,79 +1312,43 @@ def main():
 
             render_container_if(mi_has, mi_chart)
 
-        # New: Partnership types your company currently has (multi-select counts)
+        # Partnership types your company has (multi-select)
         create_section_header("Partnership types your company has")
-        part_cols = [c for c in flt.columns if "Which of the following Partnership types does your company have?" in c]
+        part_cols = [c for c in flt.columns if PARTNERSHIP_HAVE_PREFIX in c]
         if part_cols:
-            counts = {}
-            for col in part_cols:
-                # convert to numeric 1/0 for selected/unselected
-                s = pd.to_numeric(flt[col], errors="coerce")
-                total_selected = s.sum(skipna=True)
-                if total_selected > 0:
-                    # take the label after the underscore
-                    label = col.split("_")[-1]
-                    counts[label] = total_selected
-            if counts:
-                df_part = (
-                    pd.DataFrame.from_dict(counts, orient="index", columns=["count"])
-                    .reset_index()
-                    .rename(columns={"index": "category"})
+            df_part = multi_select_to_pct(flt, part_cols)
+
+            def part_chart():
+                bar_chart_from_pct(
+                    df_part,
+                    "category",
+                    "pct",
+                    "Current partnership types",
+                    horizontal=True,
+                    max_categories=None,
                 )
-                # compute percentage relative to number of responses after filtering
-                if len(flt) > 0:
-                    df_part["pct"] = (df_part["count"] / len(flt)) * 100
-                else:
-                    df_part["pct"] = 0
 
-                def part_chart():
-                    bar_chart_from_pct(
-                        df_part,
-                        "category",
-                        "pct",
-                        "Current partnership types",
-                        horizontal=True,
-                        max_categories=10,
-                    )
+            render_container_if(not df_part.empty, part_chart)
 
-                render_container_if(True, part_chart)
-
-        # New: Partnership types you plan to expand into (multi-select counts)
+        # Partnership types you plan to expand into (multi-select)
         create_section_header("Partnership types you plan to expand into")
-        expand_cols = [c for c in flt.columns if "which partnership types are you planning to expand" in c.lower()]
+        expand_cols = [c for c in flt.columns if PARTNERSHIP_EXPAND_PREFIX in c]
         if expand_cols:
-            counts_expand = {}
-            for col in expand_cols:
-                s = pd.to_numeric(flt[col], errors="coerce")
-                total_selected = s.sum(skipna=True)
-                if total_selected > 0:
-                    label = col.split("_")[-1]
-                    counts_expand[label] = total_selected
-            if counts_expand:
-                df_expand = (
-                    pd.DataFrame.from_dict(counts_expand, orient="index", columns=["count"])
-                    .reset_index()
-                    .rename(columns={"index": "category"})
+            df_expand = multi_select_to_pct(flt, expand_cols)
+
+            def expand_chart():
+                bar_chart_from_pct(
+                    df_expand,
+                    "category",
+                    "pct",
+                    "Partnership types planned for expansion",
+                    horizontal=True,
+                    max_categories=None,
                 )
-                # percent relative to filtered respondents
-                if len(flt) > 0:
-                    df_expand["pct"] = (df_expand["count"] / len(flt)) * 100
-                else:
-                    df_expand["pct"] = 0
 
-                def expand_chart():
-                    bar_chart_from_pct(
-                        df_expand,
-                        "category",
-                        "pct",
-                        "Partnership types planned for expansion",
-                        horizontal=True,
-                        max_categories=10,
-                    )
+            render_container_if(not df_expand.empty, expand_chart)
 
-                render_container_if(True, expand_chart)
-
-        # New: Distribution of total partners count
+        # Total partners count
         create_section_header("Total partners count")
         if COL_TOTAL_PARTNERS and COL_TOTAL_PARTNERS in flt.columns:
             total_has = not flt[COL_TOTAL_PARTNERS].dropna().empty
@@ -1244,7 +1366,7 @@ def main():
 
             render_container_if(total_has, total_chart)
 
-        # New: Active partners generating revenue
+        # Active partners generating revenue
         create_section_header("Active partners generating revenue")
         if COL_ACTIVE_PARTNERS and COL_ACTIVE_PARTNERS in flt.columns:
             active_has = not flt[COL_ACTIVE_PARTNERS].dropna().empty
@@ -1298,37 +1420,23 @@ def main():
 
             render_container_if(mg_has, mg_chart)
 
-        # Bonus: How partner satisfaction is measured (multi-select checkboxes)
+        # How partner satisfaction is measured (multi-select)
         create_section_header("How partner satisfaction is measured")
         sat_cols = [c for c in flt.columns if SAT_PREFIX in c]
         if sat_cols:
-            counts = {}
-            for col in sat_cols:
-                s = pd.to_numeric(flt[col], errors="coerce")
-                val = s.sum(skipna=True)
-                if val > 0:
-                    # Extract the part after the underscore for label
-                    label = col.split("_")[-1]
-                    counts[label] = val
-            if counts:
-                df_sat = (
-                    pd.DataFrame.from_dict(counts, orient="index", columns=["count"])
-                    .reset_index()
-                    .rename(columns={"index": "category"})
+            df_sat = multi_select_to_pct(flt, sat_cols)
+
+            def sat_chart():
+                bar_chart_from_pct(
+                    df_sat,
+                    "category",
+                    "pct",
+                    "How partner satisfaction is measured",
+                    horizontal=True,
+                    max_categories=None,
                 )
-                df_sat["pct"] = (df_sat["count"] / df_sat["count"].sum()) * 100
 
-                def sat_chart():
-                    bar_chart_from_pct(
-                        df_sat,
-                        "category",
-                        "pct",
-                        "How partner satisfaction is measured",
-                        horizontal=True,
-                        max_categories=12,
-                    )
-
-                render_container_if(True, sat_chart)
+            render_container_if(not df_sat.empty, sat_chart)
 
     # ======================================================
     # TEAM & INVESTMENT
@@ -1370,7 +1478,7 @@ def main():
 
             render_container_if(bud_has, bud_chart)
 
-        # New section: Where the Partnerships team reports (reporting structure)
+        # Reporting structure
         create_section_header("Where the Partnerships team reports")
         if COL_REPORTING and COL_REPORTING in flt.columns:
             rep_series = flt[COL_REPORTING].dropna().astype(str)
@@ -1389,40 +1497,25 @@ def main():
 
             render_container_if(rep_has, rep_chart)
 
-        # New section: Top 3 Budget Line Items (excluding headcount)
+        # Top 3 budget line items (multi-select)
         create_section_header("Top 3 budget line items (excluding headcount)")
-        # Determine multi-select columns for top 3 budget items by prefix
         budget_item_cols = [c for c in flt.columns if COL_TOP3_BUDGET_PREFIX in c]
         if budget_item_cols:
-            counts = {}
-            for col in budget_item_cols:
-                s = pd.to_numeric(flt[col], errors="coerce")
-                val = s.sum(skipna=True)
-                if val > 0:
-                    # Label is part after underscore (split at last underscore)
-                    label = col.split("_")[-1]
-                    counts[label] = val
-            if counts:
-                df_bud = (
-                    pd.DataFrame.from_dict(counts, orient="index", columns=["count"])
-                    .reset_index()
-                    .rename(columns={"index": "category"})
+            df_bud = multi_select_to_pct(flt, budget_item_cols)
+
+            def budget_items_chart():
+                bar_chart_from_pct(
+                    df_bud,
+                    "category",
+                    "pct",
+                    "Top 3 budget line items",
+                    horizontal=True,
+                    max_categories=None,
                 )
-                df_bud["pct"] = (df_bud["count"] / df_bud["count"].sum()) * 100
 
-                def budget_items_chart():
-                    bar_chart_from_pct(
-                        df_bud,
-                        "category",
-                        "pct",
-                        "Top 3 Budget Line Items",
-                        horizontal=True,
-                        max_categories=10,
-                    )
+            render_container_if(not df_bud.empty, budget_items_chart)
 
-                render_container_if(True, budget_items_chart)
-
-        # Bonus: Partner training & enablement level provided
+        # Partner training & enablement level provided
         create_section_header("Partner training & enablement level provided")
         if COL_TRAINING and COL_TRAINING in flt.columns:
             tr_series = flt[COL_TRAINING].dropna().astype(str)
@@ -1440,6 +1533,24 @@ def main():
                 )
 
             render_container_if(tr_has, tr_chart)
+
+        # Partner roles (multi-select)
+        create_section_header("Partner roles in your organization")
+        roles_cols = [c for c in flt.columns if ROLES_PREFIX in c]
+        if roles_cols:
+            df_roles = multi_select_to_pct(flt, roles_cols)
+
+            def roles_chart():
+                bar_chart_from_pct(
+                    df_roles,
+                    "category",
+                    "pct",
+                    "Roles that exist on the Partner Team",
+                    horizontal=True,
+                    max_categories=None,
+                )
+
+            render_container_if(not df_roles.empty, roles_chart)
 
     # ======================================================
     # TECHNOLOGY & AI
@@ -1617,6 +1728,7 @@ def main():
             if s_nonnull.empty:
                 continue
             numeric_coerced = pd.to_numeric(s_nonnull, errors="coerce")
+            # skip mainly numeric questions
             if numeric_coerced.notna().mean() > 0.9:
                 continue
             n_unique = s_nonnull.astype(str).nunique()
