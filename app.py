@@ -9,7 +9,7 @@ st.set_page_config(
     page_title="SOPL 2025 - Partnership Analytics",
     page_icon="PL_transparent_1080.ico",
     layout="wide",
-    initial_sidebar_state="collapsed",  # no sidebar
+    initial_sidebar_state="expanded",
 )
 
 # ==================== BRAND COLORS ====================
@@ -145,11 +145,21 @@ main.block-container {
     color: #1e293b !important;
 }
 
-/* Chart tiles */
-.chart-container {
+/* Static cards (welcome / about) – NO hover shadow */
+.card-static {
     background: var(--card);
     border-radius: 16px;
     padding: 1.5rem;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 4px 10px rgba(15,23,42,0.04);
+    margin-bottom: 1.5rem;
+}
+
+/* Chart tiles – light border, hover shadow, animation */
+.chart-container {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 1.75rem 1.5rem 1.5rem 1.5rem;
     border: 1px solid #e2e8f0;
     box-shadow: 0 4px 10px rgba(15,23,42,0.04);
     margin-bottom: 1.5rem;
@@ -163,6 +173,7 @@ main.block-container {
     border-color: #cbd5f5;
     background-color: #ffffff;
 }
+
 .chart-caption {
     font-size: 0.85rem;
     color: var(--muted) !important;
@@ -178,43 +189,38 @@ main.block-container {
     margin: 1.5rem 0;
 }
 
-/* Filter styling (top bar) */
-.filter-card {
-    background: #ffffff;
-    border-radius: 16px;
-    padding: 1rem 1.25rem 0.25rem 1.25rem;
-    border: 1px solid #e2e8f0;
-    box-shadow: 0 4px 10px rgba(15,23,42,0.04);
-    margin-bottom: 1.5rem;
+/* Sidebar styling */
+[data-testid="stSidebar"] {
+    background-color: #ffffff !important;
+    border-right: 1px solid #e2e8f0;
 }
-.filter-panel-title {
-    font-size: 0.95rem;
+[data-testid="stSidebar"] > div {
+    padding: 1rem 0.75rem 2rem 0.75rem;
+}
+.sidebar-title {
+    font-size: 1.05rem;
+    font-weight: 800;
+    margin-bottom: 0.5rem;
+}
+.sidebar-section-label {
+    font-size: 0.9rem;
     font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: #64748b;
-    margin-bottom: 0.1rem;
-}
-.filter-panel-subtitle {
-    font-size: 0.85rem;
-    color: #94a3b8;
-    margin-bottom: 0.6rem;
+    margin-top: 1rem;
+    margin-bottom: 0.25rem;
 }
 
-/* Make selectboxes look like the design reference */
-.stSelectbox > div > div,
-.stMultiSelect > div > div {
-    border-radius: 999px;
+/* Make multiselect look like filter list */
+.stSidebar .stMultiSelect > div > div {
+    border-radius: 14px;
     border: 1px solid #e2e8f0;
     transition: all 0.18s ease;
-    background-color: #f8fafc;
+    background-color: #f9fafb;
 }
-.stSelectbox > div > div:hover,
-.stMultiSelect > div > div:hover {
+.stSidebar .stMultiSelect > div > div:hover {
     border-color: #ec3d72;
     box-shadow: 0 0 0 2px rgba(236, 61, 114, 0.20);
 }
-.stMultiSelect [data-baseweb="tag"] {
+.stSidebar .stMultiSelect [data-baseweb="tag"] {
     background-color: #ec3d72 !important;
     color: #ffffff !important;
     border-radius: 999px !important;
@@ -403,7 +409,7 @@ def atlas_light_theme():
                 "fontSize": 16,
                 "fontWeight": 700,
                 "anchor": "start",
-                "offset": 10,
+                "offset": 12,
             },
             "header": {"labelFontSize": 12, "titleFontSize": 14},
         }
@@ -467,7 +473,28 @@ def binned_pct_custom(series: pd.Series, edges: list[float], labels: list[str]) 
     return pct_df
 
 
-def multi_select_to_pct(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
+def _default_label_from_col(col_name: str) -> str:
+    """
+    Generic extraction:
+    - If text in quotes, use that (e.g. "Solution Partnerships")
+    - Else if ' – ' present, use text before it
+    - Else if '? ' present, use text after '? '
+    - Else fall back to whole column name
+    """
+    if '"' in col_name:
+        parts = col_name.split('"')
+        if len(parts) >= 3:
+            return parts[1].strip()
+    if " – " in col_name:
+        return col_name.split(" – ", 1)[0].split("?")[-1].strip()
+    if "? " in col_name:
+        return col_name.split("? ", 1)[1].strip()
+    return col_name.strip()
+
+
+def multi_select_to_pct(
+    df: pd.DataFrame, cols: list[str], label_parser=_default_label_from_col
+) -> pd.DataFrame:
     """
     For a block of multi-select checkbox columns (binary 1/0),
     compute percentage of respondents who selected each option.
@@ -483,15 +510,9 @@ def multi_select_to_pct(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
 
     counts = sub.sum(skipna=True)
 
-    def extract_label(col_name: str) -> str:
-        # Text after "? " becomes the category; fallback to full column name
-        if "? " in col_name:
-            return col_name.split("? ", 1)[1].strip()
-        return col_name
-
     out = counts.reset_index()
     out.columns = ["col", "count"]
-    out["category"] = out["col"].apply(extract_label)
+    out["category"] = out["col"].apply(label_parser)
     out["pct"] = (out["count"] / n_resp) * 100.0
     return out[["category", "pct"]].sort_values("pct", ascending=False)
 
@@ -521,7 +542,7 @@ def donut_chart_clean(df_pct: pd.DataFrame, cat_field: str, pct_field: str, titl
 
     chart = donut.properties(
         width=400,
-        height=400,
+        height=320,
         title=alt.TitleParams(title, fontSize=16, fontWeight=700, anchor="start"),
     ).configure_view(strokeWidth=0)
 
@@ -626,7 +647,7 @@ def bar_chart_from_pct(
         ).encode(text=alt.Text("PercentLabel:N"))
 
         chart = (bars + labels).properties(
-            height=400,
+            height=320,
             title=alt.TitleParams(title, fontSize=16, fontWeight=700, anchor="start"),
         )
 
@@ -699,7 +720,7 @@ def render_container_if(has_data: bool, chart_fn):
 def two_up_or_full(left_has: bool, left_fn, right_has: bool, right_fn):
     """
     Display two charts side-by-side in a 2-column grid.
-    If only one chart has data, it still uses the same grid so tile sizes align.
+    If only one chart has data, it still uses the same grid so tiles line up.
     """
     if not left_has and not right_has:
         return
@@ -710,13 +731,13 @@ def two_up_or_full(left_has: bool, left_fn, right_has: bool, right_fn):
         if left_has:
             render_container_if(True, left_fn)
         else:
-            st.markdown("")  # empty tile slot
+            st.markdown("")
 
     with c2:
         if right_has:
             render_container_if(True, right_fn)
         else:
-            st.markdown("")  # empty tile slot
+            st.markdown("")
 
 
 def clean_question_title(col_name: str) -> str:
@@ -796,7 +817,7 @@ def main():
     # ---- Introduction ----
     st.markdown(
         """
-<div class="chart-container" style="margin-top:0;">
+<div class="card-static" style="margin-top:0;">
   <p><strong>Welcome to the State of Partnership Leaders 2025 Dashboard.</strong></p>
   <p>
   In prior years, we have released a 40+ page document with all of the data but with the advancements in AI adoption,
@@ -810,7 +831,7 @@ def main():
     </li>
     <li>
       <strong>SOPL Data Dashboard</strong> – You will find all of the data from the report in an interactive dashboard below.
-      Use the filters above to customize the data to your interests and the Performance and Partner Impact related tabs to navigate the main themes.
+      Use the filters on the left to customize the data to your interests and the Performance and Partner Impact related tabs to navigate the main themes.
     </li>
   </ul>
 </div>
@@ -831,7 +852,6 @@ def main():
         unsafe_allow_html=True,
     )
 
-    # embed pickaxe widget
     pickaxe_html = """
     <div id="deployment-5870ff7d-8fcf-4395-976b-9e9fdefbb0ff" style="width:100%; max-width:1200px; margin:0 auto;"></div>
     <script src="https://studio.pickaxe.co/api/embed/bundle.js" defer></script>
@@ -895,8 +915,8 @@ def main():
 
     # Multi-select prefixes
     INFLUENCE_PREFIX = "Besides Sourced Revenue, how else does your company measure"
-    PARTNERSHIP_HAVE_PREFIX = "Which of the following Partnership types"
-    PARTNERSHIP_EXPAND_PREFIX = "Which partnership types are you planning to expand"
+    PARTNERSHIP_HAVE_PREFIX = "Which of the following Partnership types does your company have?"
+    PARTNERSHIP_EXPAND_PREFIX = "Which partnership types are you planning to expand into"
     ROLES_PREFIX = "What roles exist on your Partner Team?"
     COL_TOP3_BUDGET_PREFIX = "What are the top 3 budget line items for your Partnerships organization, excluding headcount?"
     SAT_PREFIX = "How do you measure partner satisfaction?"
@@ -908,21 +928,9 @@ def main():
     else:
         df["RegionStd"] = None
 
-    # ---- Filters (top bar, no sidebar) ----
-    st.markdown(
-        """
-        <div class="filter-card">
-          <div class="filter-panel-title">Filters</div>
-          <p class="filter-panel-subtitle">
-            Adjust Region, Annual Revenue, and Total Employees to customize the view. All tabs and charts update automatically.
-          </p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    # we have to place widgets after the card markup, but visually it appears inside it
-
-    col_f1, col_f2, col_f3 = st.columns(3)
+    # ---- Sidebar filters ----
+    st.sidebar.markdown("<div class='sidebar-title'>Filters</div>", unsafe_allow_html=True)
+    st.sidebar.markdown("<span style='font-size:0.8rem;color:#94a3b8;'>Use All options to reset, or select specific bands to customize.</span>", unsafe_allow_html=True)
 
     # Region filter with "All Regions" sentinel but multi-select
     selected_regions_clean = None
@@ -930,12 +938,13 @@ def main():
         region_options = sorted(df["RegionStd"].dropna().unique().tolist())
         sentinel_region = "All Regions"
         region_display_options = [sentinel_region] + region_options
-        with col_f1:
-            selected_regions_raw = st.multiselect(
-                "Region",
-                region_display_options,
-                [sentinel_region],
-            )
+        st.sidebar.markdown("<div class='sidebar-section-label'>Region</div>", unsafe_allow_html=True)
+        selected_regions_raw = st.sidebar.multiselect(
+            " ",
+            region_display_options,
+            [sentinel_region],
+            label_visibility="collapsed",
+        )
         if sentinel_region in selected_regions_raw or not selected_regions_raw:
             selected_regions_clean = None
         else:
@@ -959,12 +968,13 @@ def main():
         ]
         sentinel_rev = "All Revenue Bands"
         revenue_display_options = [sentinel_rev] + ordered_revenue
-        with col_f2:
-            selected_revenue_raw = st.multiselect(
-                "Annual Revenue",
-                revenue_display_options,
-                [sentinel_rev],
-            )
+        st.sidebar.markdown("<div class='sidebar-section-label'>Annual Revenue</div>", unsafe_allow_html=True)
+        selected_revenue_raw = st.sidebar.multiselect(
+            "  ",
+            revenue_display_options,
+            [sentinel_rev],
+            label_visibility="collapsed",
+        )
         if sentinel_rev in selected_revenue_raw or not selected_revenue_raw:
             selected_revenue_clean = None
         else:
@@ -987,12 +997,13 @@ def main():
         ]
         sentinel_emp = "All Sizes"
         emp_display_options = [sentinel_emp] + ordered_emp
-        with col_f3:
-            selected_employees_raw = st.multiselect(
-                "Total Employees",
-                emp_display_options,
-                [sentinel_emp],
-            )
+        st.sidebar.markdown("<div class='sidebar-section-label'>Total Employees</div>", unsafe_allow_html=True)
+        selected_employees_raw = st.sidebar.multiselect(
+            "   ",
+            emp_display_options,
+            [sentinel_emp],
+            label_visibility="collapsed",
+        )
         if sentinel_emp in selected_employees_raw or not selected_employees_raw:
             selected_employees_clean = None
         else:
@@ -1016,7 +1027,7 @@ def main():
     create_section_header("About this dashboard and dataset")
     st.markdown(
         """
-    <div class="chart-container" style="margin-top:0;">
+    <div class="card-static" style="margin-top:0;">
       <p>
       Respondents represent organizations from four key regions, namely North America (NA),
       Europe the Middle East and Africa (EMEA), Asia Pacific (APAC), and Latin America (LATAM),
@@ -1026,7 +1037,7 @@ def main():
       and industries.
       </p>
       <p style="margin-top:0.5rem;">
-      Use the filters above (Region, Annual Revenue, Total Employees) to narrow the view;
+      Use the filters on the left (Region, Annual Revenue, Total Employees) to narrow the view;
       the charts in every tab update automatically to reflect the current selection.
       </p>
     </div>
@@ -1169,7 +1180,6 @@ def main():
 
         two_up_or_full(ds_has, ds_chart, cac_has, cac_chart)
 
-        # Additional chart row: win rate and retention
         wr_has = COL_WIN_RATE in flt.columns and not flt[COL_WIN_RATE].dropna().empty
 
         def wr_chart():
@@ -1211,467 +1221,415 @@ def main():
         influence_cols = [c for c in flt.columns if INFLUENCE_PREFIX in c]
         if influence_cols:
             inf_pct = multi_select_to_pct(flt, influence_cols)
-            inf_has = not inf_pct.empty
 
             def inf_chart():
                 bar_chart_from_pct(
                     inf_pct,
                     "category",
                     "pct",
-                    "Partner influence impact measures (beyond sourced revenue)",
+                    "Partner influence impact measures",
                     horizontal=True,
                     max_categories=None,
                 )
 
-            render_container_if(inf_has, inf_chart)
+            render_container_if(not inf_pct.empty, inf_chart)
 
     # ======================================================
     # STRATEGIC DIRECTION
     # ======================================================
     with tab_strategy:
-        create_section_header("Primary goal for partnerships (next 12 months)")
-        if COL_PRIMARY_GOAL and COL_PRIMARY_GOAL in flt.columns:
-            pg_has = not flt[COL_PRIMARY_GOAL].dropna().empty
+        create_section_header("Strategic direction")
 
-            def pg_chart():
-                pg_pct = value_counts_pct(flt[COL_PRIMARY_GOAL])
-                bar_chart_from_pct(pg_pct, "category", "pct", "Primary goal for partnerships", horizontal=True)
+        # Primary goal vs Executive expectations – 2-up
+        pg_has = COL_PRIMARY_GOAL and COL_PRIMARY_GOAL in flt.columns and not flt[COL_PRIMARY_GOAL].dropna().empty
 
-            render_container_if(pg_has, pg_chart)
+        def pg_chart():
+            pg_pct = value_counts_pct(flt[COL_PRIMARY_GOAL])
+            bar_chart_from_pct(pg_pct, "category", "pct", "Primary goal for partnerships", horizontal=True)
 
-        create_section_header("Executive expectations of partnerships")
-        if COL_EXEC_EXPECT and COL_EXEC_EXPECT in flt.columns:
-            ex_has = not flt[COL_EXEC_EXPECT].dropna().empty
+        ex_has = COL_EXEC_EXPECT and COL_EXEC_EXPECT in flt.columns and not flt[COL_EXEC_EXPECT].dropna().empty
 
-            def ex_chart():
-                ex_pct = value_counts_pct(flt[COL_EXEC_EXPECT])
-                bar_chart_from_pct(ex_pct, "category", "pct", "Executive expectations", horizontal=True)
+        def ex_chart():
+            # shorten labels: use word before " - "
+            s = flt[COL_EXEC_EXPECT].dropna().astype(str)
+            short = s.str.split(" - ", n=1).str[0]
+            ex_pct = value_counts_pct(short)
+            bar_chart_from_pct(ex_pct, "category", "pct", "Executive expectations", horizontal=True)
 
-            render_container_if(ex_has, ex_chart)
+        two_up_or_full(pg_has, pg_chart, ex_has, ex_chart)
 
-        create_section_header("Expected revenue from partnerships (next 12 months)")
-        if COL_EXPECTED_REV and COL_EXPECTED_REV in flt.columns:
-            er_has = not flt[COL_EXPECTED_REV].dropna().empty
+        # Expected revenue vs partner focus – 2-up
+        er_has = COL_EXPECTED_REV and COL_EXPECTED_REV in flt.columns and not flt[COL_EXPECTED_REV].dropna().empty
 
-            def er_chart():
-                edges = [0, 50, 75, 100, 201]
-                labels = ["Less than 50%", "50–75%", "75–100%", "More than 100%"]
-                pct_df = binned_pct_custom(flt[COL_EXPECTED_REV], edges, labels)
-                if pct_df.empty:
-                    return
-                bar_chart_from_pct(
-                    pct_df,
-                    "bin",
-                    "pct",
-                    "Expected share of revenue from partnerships",
-                    horizontal=False,
-                    max_categories=4,
-                )
+        def er_chart():
+            edges = [0, 50, 75, 100, 201]
+            labels = ["Less than 50%", "50–75%", "75–100%", "More than 100%"]
+            pct_df = binned_pct_custom(flt[COL_EXPECTED_REV], edges, labels)
+            if pct_df.empty:
+                return
+            bar_chart_from_pct(
+                pct_df,
+                "bin",
+                "pct",
+                "Expected share of revenue from partnerships",
+                horizontal=False,
+                max_categories=4,
+            )
 
-            render_container_if(er_has, er_chart)
+        pf_has = COL_PARTNER_FOCUS and COL_PARTNER_FOCUS in flt.columns and not flt[COL_PARTNER_FOCUS].dropna().empty
 
-        create_section_header("Forward-looking strategy")
+        def pf_chart():
+            pf_pct = value_counts_pct(flt[COL_PARTNER_FOCUS])
+            bar_chart_from_pct(
+                pf_pct,
+                "category",
+                "pct",
+                "Partnership focus in the next 12 months",
+                horizontal=True,
+            )
 
-        if COL_PARTNER_FOCUS and COL_PARTNER_FOCUS in flt.columns:
-            pf_has = not flt[COL_PARTNER_FOCUS].dropna().empty
+        two_up_or_full(er_has, er_chart, pf_has, pf_chart)
 
-            def pf_chart():
-                pf_pct = value_counts_pct(flt[COL_PARTNER_FOCUS])
-                bar_chart_from_pct(
-                    pf_pct,
-                    "category",
-                    "pct",
-                    "Partnership focus in the next 12 months",
-                    horizontal=True,
-                )
+        # Strategic bet vs Forecasted performance – 2-up
+        sb_has = COL_STRATEGIC_BET and COL_STRATEGIC_BET in flt.columns and not flt[COL_STRATEGIC_BET].dropna().empty
 
-            render_container_if(pf_has, pf_chart)
+        def sb_chart():
+            sb_pct = value_counts_pct(flt[COL_STRATEGIC_BET])
+            bar_chart_from_pct(
+                sb_pct,
+                "category",
+                "pct",
+                "Strategic bet for the next 12 months",
+                horizontal=True,
+            )
 
-        if COL_STRATEGIC_BET and COL_STRATEGIC_BET in flt.columns:
-            sb_has = not flt[COL_STRATEGIC_BET].dropna().empty
+        fp_has = COL_FORECAST_PERF and COL_FORECAST_PERF in flt.columns and not flt[COL_FORECAST_PERF].dropna().empty
 
-            def sb_chart():
-                sb_pct = value_counts_pct(flt[COL_STRATEGIC_BET])
-                bar_chart_from_pct(
-                    sb_pct,
-                    "category",
-                    "pct",
-                    "Strategic bet for the next 12 months",
-                    horizontal=True,
-                )
+        def fp_chart():
+            fp_pct = value_counts_pct(flt[COL_FORECAST_PERF])
+            bar_chart_from_pct(
+                fp_pct,
+                "category",
+                "pct",
+                "Forecasted performance vs goals",
+                horizontal=True,
+            )
 
-            render_container_if(sb_has, sb_chart)
-
-        if COL_FORECAST_PERF and COL_FORECAST_PERF in flt.columns:
-            fp_has = not flt[COL_FORECAST_PERF].dropna().empty
-
-            def fp_chart():
-                fp_pct = value_counts_pct(flt[COL_FORECAST_PERF])
-                bar_chart_from_pct(
-                    fp_pct,
-                    "category",
-                    "pct",
-                    "Forecasted performance vs goals",
-                    horizontal=True,
-                )
-
-            render_container_if(fp_has, fp_chart)
+        two_up_or_full(sb_has, sb_chart, fp_has, fp_chart)
 
     # ======================================================
     # PARTNERSHIP PORTFOLIO
     # ======================================================
     with tab_portfolio:
-        create_section_header("Most impactful partnership type")
-        if COL_MOST_IMPACTFUL_TYPE and COL_MOST_IMPACTFUL_TYPE in flt.columns:
-            mi_has = not flt[COL_MOST_IMPACTFUL_TYPE].dropna().empty
+        create_section_header("Partnership portfolio")
 
-            def mi_chart():
-                mi_pct = value_counts_pct(flt[COL_MOST_IMPACTFUL_TYPE])
-                donut_chart_clean(mi_pct, "category", "pct", "Most impactful partnership type")
+        # Most impactful type vs current types – 2-up
+        mi_has = COL_MOST_IMPACTFUL_TYPE and COL_MOST_IMPACTFUL_TYPE in flt.columns and not flt[COL_MOST_IMPACTFUL_TYPE].dropna().empty
 
-            render_container_if(mi_has, mi_chart)
+        def mi_chart():
+            mi_pct = value_counts_pct(flt[COL_MOST_IMPACTFUL_TYPE])
+            donut_chart_clean(mi_pct, "category", "pct", "Most impactful partnership type")
 
-        # Partnership types your company has (multi-select)
-        create_section_header("Partnership types your company has")
         part_cols = [c for c in flt.columns if PARTNERSHIP_HAVE_PREFIX in c]
-        if part_cols:
-            df_part = multi_select_to_pct(flt, part_cols)
+        df_part = multi_select_to_pct(flt, part_cols) if part_cols else pd.DataFrame()
 
-            def part_chart():
-                bar_chart_from_pct(
-                    df_part,
-                    "category",
-                    "pct",
-                    "Current partnership types",
-                    horizontal=True,
-                    max_categories=None,
-                )
+        def part_chart():
+            bar_chart_from_pct(
+                df_part,
+                "category",
+                "pct",
+                "Current partnership types",
+                horizontal=True,
+                max_categories=None,
+            )
 
-            render_container_if(not df_part.empty, part_chart)
+        two_up_or_full(mi_has, mi_chart, not df_part.empty, part_chart)
 
-        # Partnership types you plan to expand into (multi-select)
-        create_section_header("Partnership types you plan to expand into")
+        # Expansion vs total partners – 2-up
         expand_cols = [c for c in flt.columns if PARTNERSHIP_EXPAND_PREFIX in c]
-        if expand_cols:
-            df_expand = multi_select_to_pct(flt, expand_cols)
+        df_expand = multi_select_to_pct(flt, expand_cols) if expand_cols else pd.DataFrame()
 
-            def expand_chart():
-                bar_chart_from_pct(
-                    df_expand,
-                    "category",
-                    "pct",
-                    "Partnership types planned for expansion",
-                    horizontal=True,
-                    max_categories=None,
-                )
+        def expand_chart():
+            bar_chart_from_pct(
+                df_expand,
+                "category",
+                "pct",
+                "Partnership types planned for expansion",
+                horizontal=True,
+                max_categories=None,
+            )
 
-            render_container_if(not df_expand.empty, expand_chart)
+        total_has = COL_TOTAL_PARTNERS and COL_TOTAL_PARTNERS in flt.columns and not flt[COL_TOTAL_PARTNERS].dropna().empty
 
-        # Total partners count
-        create_section_header("Total partners count")
-        if COL_TOTAL_PARTNERS and COL_TOTAL_PARTNERS in flt.columns:
-            total_has = not flt[COL_TOTAL_PARTNERS].dropna().empty
+        def total_chart():
+            total_pct = value_counts_pct(flt[COL_TOTAL_PARTNERS])
+            bar_chart_from_pct(
+                total_pct,
+                "category",
+                "pct",
+                "Number of total partners",
+                horizontal=False,
+                max_categories=TOP_N_DEFAULT,
+            )
 
-            def total_chart():
-                total_pct = value_counts_pct(flt[COL_TOTAL_PARTNERS])
-                bar_chart_from_pct(
-                    total_pct,
-                    "category",
-                    "pct",
-                    "Number of total partners",
-                    horizontal=False,
-                    max_categories=TOP_N_DEFAULT,
-                )
+        two_up_or_full(not df_expand.empty, expand_chart, total_has, total_chart)
 
-            render_container_if(total_has, total_chart)
+        # Active partners – single row but still in grid with empty second col
+        active_has = COL_ACTIVE_PARTNERS and COL_ACTIVE_PARTNERS in flt.columns and not flt[COL_ACTIVE_PARTNERS].dropna().empty
 
-        # Active partners generating revenue
-        create_section_header("Active partners generating revenue")
-        if COL_ACTIVE_PARTNERS and COL_ACTIVE_PARTNERS in flt.columns:
-            active_has = not flt[COL_ACTIVE_PARTNERS].dropna().empty
+        def active_chart():
+            active_pct = value_counts_pct(flt[COL_ACTIVE_PARTNERS])
+            bar_chart_from_pct(
+                active_pct,
+                "category",
+                "pct",
+                "Active partners generating revenue (last 12 months)",
+                horizontal=False,
+                max_categories=TOP_N_DEFAULT,
+            )
 
-            def active_chart():
-                active_pct = value_counts_pct(flt[COL_ACTIVE_PARTNERS])
-                bar_chart_from_pct(
-                    active_pct,
-                    "category",
-                    "pct",
-                    "Active partners generating revenue (last 12 months)",
-                    horizontal=False,
-                    max_categories=TOP_N_DEFAULT,
-                )
-
-            render_container_if(active_has, active_chart)
+        two_up_or_full(active_has, active_chart, False, lambda: None)
 
     # ======================================================
     # CHALLENGES & RISKS
     # ======================================================
     with tab_ops:
-        create_section_header("Biggest challenge in scaling the partner program")
-        if COL_BIGGEST_CHALLENGE and COL_BIGGEST_CHALLENGE in flt.columns:
-            bc_has = not flt[COL_BIGGEST_CHALLENGE].dropna().empty
+        create_section_header("Challenges & risks")
 
-            def bc_chart():
-                bc_pct = value_counts_pct(flt[COL_BIGGEST_CHALLENGE])
-                bar_chart_from_pct(
-                    bc_pct,
-                    "category",
-                    "pct",
-                    "Biggest challenge in scaling the program",
-                    horizontal=True,
-                )
+        bc_has = COL_BIGGEST_CHALLENGE and COL_BIGGEST_CHALLENGE in flt.columns and not flt[COL_BIGGEST_CHALLENGE].dropna().empty
 
-            render_container_if(bc_has, bc_chart)
+        def bc_chart():
+            bc_pct = value_counts_pct(flt[COL_BIGGEST_CHALLENGE])
+            bar_chart_from_pct(
+                bc_pct,
+                "category",
+                "pct",
+                "Biggest challenge in scaling the program",
+                horizontal=True,
+            )
 
-        create_section_header("Most likely reason for missing goals (next 12 months)")
-        if COL_MISS_GOALS_REASON and COL_MISS_GOALS_REASON in flt.columns:
-            mg_has = not flt[COL_MISS_GOALS_REASON].dropna().empty
+        mg_has = COL_MISS_GOALS_REASON and COL_MISS_GOALS_REASON in flt.columns and not flt[COL_MISS_GOALS_REASON].dropna().empty
 
-            def mg_chart():
-                mg_pct = value_counts_pct(flt[COL_MISS_GOALS_REASON])
-                bar_chart_from_pct(
-                    mg_pct,
-                    "category",
-                    "pct",
-                    "Reason goals may be missed",
-                    horizontal=True,
-                )
+        def mg_chart():
+            mg_pct = value_counts_pct(flt[COL_MISS_GOALS_REASON])
+            bar_chart_from_pct(
+                mg_pct,
+                "category",
+                "pct",
+                "Most likely reason goals may be missed",
+                horizontal=True,
+            )
 
-            render_container_if(mg_has, mg_chart)
+        two_up_or_full(bc_has, bc_chart, mg_has, mg_chart)
 
-        # How partner satisfaction is measured (multi-select)
-        create_section_header("How partner satisfaction is measured")
+        # Partner satisfaction measurement (multi-select)
         sat_cols = [c for c in flt.columns if SAT_PREFIX in c]
-        if sat_cols:
-            df_sat = multi_select_to_pct(flt, sat_cols)
+        df_sat = multi_select_to_pct(flt, sat_cols) if sat_cols else pd.DataFrame()
 
-            def sat_chart():
-                bar_chart_from_pct(
-                    df_sat,
-                    "category",
-                    "pct",
-                    "How partner satisfaction is measured",
-                    horizontal=True,
-                    max_categories=None,
-                )
+        def sat_chart():
+            bar_chart_from_pct(
+                df_sat,
+                "category",
+                "pct",
+                "How partner satisfaction is measured",
+                horizontal=True,
+                max_categories=None,
+            )
 
-            render_container_if(not df_sat.empty, sat_chart)
+        two_up_or_full(not df_sat.empty, sat_chart, False, lambda: None)
 
     # ======================================================
     # TEAM & INVESTMENT
     # ======================================================
     with tab_team:
-        create_section_header("Partnerships team size")
-        if COL_TEAM_SIZE and COL_TEAM_SIZE in flt.columns:
-            ts_has = not flt[COL_TEAM_SIZE].dropna().empty
+        create_section_header("Team & investment")
 
-            def ts_chart():
-                ts_pct = value_counts_pct(flt[COL_TEAM_SIZE])
-                donut_chart_clean(ts_pct, "category", "pct", "Partnerships team size")
+        # Team size vs annual budget – 2-up
+        ts_has = COL_TEAM_SIZE and COL_TEAM_SIZE in flt.columns and not flt[COL_TEAM_SIZE].dropna().empty
 
-            render_container_if(ts_has, ts_chart)
+        def ts_chart():
+            ts_pct = value_counts_pct(flt[COL_TEAM_SIZE])
+            donut_chart_clean(ts_pct, "category", "pct", "Partnerships team size")
 
-        create_section_header("Annual partnerships budget (including headcount)")
         if COL_BUDGET and COL_BUDGET in flt.columns:
             bud_series = flt[COL_BUDGET].dropna().astype(str)
             bud_series = bud_series[
                 ~bud_series.str.contains("I don’t have this data|I don't have this data", case=False, na=False)
             ]
             bud_pct = value_counts_pct(bud_series)
-            bud_has = not bud_pct.empty
+        else:
+            bud_pct = pd.DataFrame()
+        bud_has = not bud_pct.empty
 
-            def bud_chart():
-                bar_chart_from_pct(
-                    bud_pct,
-                    "category",
-                    "pct",
-                    "Annual partnerships budget",
-                    horizontal=True,
-                )
-                st.markdown(
-                    '<div class="chart-caption">'
-                    "Percentages exclude respondents who selected “I don’t have this data.”"
-                    "</div>",
-                    unsafe_allow_html=True,
-                )
+        def bud_chart():
+            bar_chart_from_pct(
+                bud_pct,
+                "category",
+                "pct",
+                "Annual partnerships budget",
+                horizontal=True,
+            )
+            st.markdown(
+                '<div class="chart-caption">'
+                "Percentages exclude respondents who selected “I don’t have this data.”"
+                "</div>",
+                unsafe_allow_html=True,
+            )
 
-            render_container_if(bud_has, bud_chart)
+        two_up_or_full(ts_has, ts_chart, bud_has, bud_chart)
 
-        # Reporting structure
-        create_section_header("Where the Partnerships team reports")
-        if COL_REPORTING and COL_REPORTING in flt.columns:
+        # Reporting vs top-3 budget line items – 2-up
+        rep_has = COL_REPORTING and COL_REPORTING in flt.columns and not flt[COL_REPORTING].dropna().empty
+
+        def rep_chart():
             rep_series = flt[COL_REPORTING].dropna().astype(str)
             rep_pct = value_counts_pct(rep_series)
-            rep_has = not rep_pct.empty
+            bar_chart_from_pct(
+                rep_pct,
+                "category",
+                "pct",
+                "Where the Partnerships team reports",
+                horizontal=True,
+                max_categories=8,
+            )
 
-            def rep_chart():
-                bar_chart_from_pct(
-                    rep_pct,
-                    "category",
-                    "pct",
-                    "Reporting line of the Partnerships team",
-                    horizontal=True,
-                    max_categories=8,
-                )
-
-            render_container_if(rep_has, rep_chart)
-
-        # Top 3 budget line items (multi-select)
-        create_section_header("Top 3 budget line items (excluding headcount)")
         budget_item_cols = [c for c in flt.columns if COL_TOP3_BUDGET_PREFIX in c]
-        if budget_item_cols:
-            df_bud = multi_select_to_pct(flt, budget_item_cols)
+        df_bud = multi_select_to_pct(flt, budget_item_cols) if budget_item_cols else pd.DataFrame()
 
-            def budget_items_chart():
-                bar_chart_from_pct(
-                    df_bud,
-                    "category",
-                    "pct",
-                    "Top 3 budget line items",
-                    horizontal=True,
-                    max_categories=None,
-                )
+        def budget_items_chart():
+            bar_chart_from_pct(
+                df_bud,
+                "category",
+                "pct",
+                "Top 3 budget line items (excluding headcount)",
+                horizontal=True,
+                max_categories=None,
+            )
 
-            render_container_if(not df_bud.empty, budget_items_chart)
+        two_up_or_full(rep_has, rep_chart, not df_bud.empty, budget_items_chart)
 
-        # Partner training & enablement level provided
-        create_section_header("Partner training & enablement level provided")
-        if COL_TRAINING and COL_TRAINING in flt.columns:
+        # Training vs roles – 2-up
+        tr_has = COL_TRAINING and COL_TRAINING in flt.columns and not flt[COL_TRAINING].dropna().empty
+
+        def tr_chart():
             tr_series = flt[COL_TRAINING].dropna().astype(str)
             tr_pct = value_counts_pct(tr_series)
-            tr_has = not tr_pct.empty
+            bar_chart_from_pct(
+                tr_pct,
+                "category",
+                "pct",
+                "Partner training & enablement level",
+                horizontal=True,
+                max_categories=8,
+            )
 
-            def tr_chart():
-                bar_chart_from_pct(
-                    tr_pct,
-                    "category",
-                    "pct",
-                    "Partner training & enablement level",
-                    horizontal=True,
-                    max_categories=8,
-                )
-
-            render_container_if(tr_has, tr_chart)
-
-        # Partner roles (multi-select)
-        create_section_header("Partner roles in your organization")
         roles_cols = [c for c in flt.columns if ROLES_PREFIX in c]
-        if roles_cols:
-            df_roles = multi_select_to_pct(flt, roles_cols)
+        df_roles = multi_select_to_pct(flt, roles_cols) if roles_cols else pd.DataFrame()
 
-            def roles_chart():
-                bar_chart_from_pct(
-                    df_roles,
-                    "category",
-                    "pct",
-                    "Roles that exist on the Partner Team",
-                    horizontal=True,
-                    max_categories=None,
-                )
+        def roles_chart():
+            bar_chart_from_pct(
+                df_roles,
+                "category",
+                "pct",
+                "Roles that exist on the Partner Team",
+                horizontal=True,
+                max_categories=None,
+            )
 
-            render_container_if(not df_roles.empty, roles_chart)
+        two_up_or_full(tr_has, tr_chart, not df_roles.empty, roles_chart)
 
     # ======================================================
     # TECHNOLOGY & AI
     # ======================================================
     with tab_tech:
-        create_section_header("Use of technology / automation")
-        if COL_USE_TECH and COL_USE_TECH in flt.columns:
+        create_section_header("Technology & AI")
+
+        ut_has = COL_USE_TECH and COL_USE_TECH in flt.columns
+
+        def ut_chart():
             ut_pct = value_counts_pct(flt[COL_USE_TECH])
-            ut_has = not ut_pct.empty
+            donut_chart_clean(
+                ut_pct,
+                "category",
+                "pct",
+                "Currently using partner tech/automation",
+            )
 
-            def ut_chart():
-                donut_chart_clean(
-                    ut_pct,
-                    "category",
-                    "pct",
-                    "Currently using partner tech/automation",
-                )
+        ai_has = COL_USE_AI and COL_USE_AI in flt.columns
 
-            render_container_if(ut_has, ut_chart)
-
-        create_section_header("Use of AI in the partner organization")
-        if COL_USE_AI and COL_USE_AI in flt.columns:
+        def ai_chart():
             ai_pct = value_counts_pct(flt[COL_USE_AI])
-            ai_has = not ai_pct.empty
+            donut_chart_clean(
+                ai_pct,
+                "category",
+                "pct",
+                "Currently using AI in the partner organization",
+            )
 
-            def ai_chart():
-                donut_chart_clean(
-                    ai_pct,
-                    "category",
-                    "pct",
-                    "Currently using AI in the partner organization",
-                )
-
-            render_container_if(ai_has, ai_chart)
+        two_up_or_full(ut_has, ut_chart, ai_has, ai_chart)
 
     # ======================================================
     # MARKETPLACES
     # ======================================================
     with tab_market:
-        create_section_header("Listed in marketplaces")
+        create_section_header("Marketplaces")
 
-        if COL_MARKETPLACE_LISTED and COL_MARKETPLACE_LISTED in flt.columns:
+        mpl_has = COL_MARKETPLACE_LISTED and COL_MARKETPLACE_LISTED in flt.columns
+
+        def mpl_chart():
             mpl_series = normalize_yes_no(flt[COL_MARKETPLACE_LISTED])
             mpl_pct = value_counts_pct(mpl_series)
-            mpl_has = not mpl_pct.empty
+            donut_chart_clean(
+                mpl_pct,
+                "category",
+                "pct",
+                "Company listed in marketplaces",
+            )
 
-            def mpl_chart():
-                donut_chart_clean(
-                    mpl_pct,
+        mp_has_any = COL_MARKETPLACE_REV and COL_MARKETPLACE_REV in flt.columns and not flt[COL_MARKETPLACE_REV].dropna().empty
+
+        def mp_chart():
+            mp_rev = flt[COL_MARKETPLACE_REV].dropna()
+            mp_num = pd.to_numeric(mp_rev, errors="coerce")
+            if mp_num.notna().sum() > 0 and mp_num.notna().mean() > 0.7:
+                edges = [0, 5, 15, 30, 50, 101]
+                labels = [
+                    "Less than 5%",
+                    "5–15%",
+                    "15–30%",
+                    "30–50%",
+                    "More than 50%",
+                ]
+                pct_df = binned_pct_custom(mp_num, edges, labels)
+                if pct_df.empty:
+                    return
+                bar_chart_from_pct(
+                    pct_df,
+                    "bin",
+                    "pct",
+                    "Share of revenue from marketplaces",
+                    horizontal=False,
+                    max_categories=5,
+                )
+            else:
+                cat_pct = value_counts_pct(mp_rev.astype(str))
+                if cat_pct.empty:
+                    return
+                bar_chart_from_pct(
+                    cat_pct,
                     "category",
                     "pct",
-                    "Company listed in marketplaces",
+                    "Share of revenue from marketplaces",
+                    horizontal=False,
                 )
+            st.markdown(
+                '<div class="chart-caption">'
+                "No specific marketplace names are displayed."
+                "</div>",
+                unsafe_allow_html=True,
+            )
 
-            render_container_if(mpl_has, mpl_chart)
-
-        create_section_header("Revenue from marketplaces")
-        if COL_MARKETPLACE_REV and COL_MARKETPLACE_REV in flt.columns:
-            mp_rev = flt[COL_MARKETPLACE_REV].dropna()
-            mp_has_any = not mp_rev.empty
-
-            def mp_chart():
-                mp_num = pd.to_numeric(mp_rev, errors="coerce")
-                if mp_num.notna().sum() > 0 and mp_num.notna().mean() > 0.7:
-                    edges = [0, 5, 15, 30, 50, 101]
-                    labels = [
-                        "Less than 5%",
-                        "5–15%",
-                        "15–30%",
-                        "30–50%",
-                        "More than 50%",
-                    ]
-                    pct_df = binned_pct_custom(mp_num, edges, labels)
-                    if pct_df.empty:
-                        return
-                    bar_chart_from_pct(
-                        pct_df,
-                        "bin",
-                        "pct",
-                        "Share of revenue from marketplaces",
-                        horizontal=False,
-                        max_categories=5,
-                    )
-                else:
-                    cat_pct = value_counts_pct(mp_rev.astype(str))
-                    if cat_pct.empty:
-                        return
-                    bar_chart_from_pct(
-                        cat_pct,
-                        "category",
-                        "pct",
-                        "Share of revenue from marketplaces",
-                        horizontal=False,
-                    )
-                st.markdown(
-                    '<div class="chart-caption">'
-                    "No specific marketplace names are displayed."
-                    "</div>",
-                    unsafe_allow_html=True,
-                )
-
-            render_container_if(mp_has_any, mp_chart)
+        two_up_or_full(mpl_has, mpl_chart, mp_has_any, mp_chart)
 
     # ======================================================
     # ADDITIONAL INSIGHTS
@@ -1681,7 +1639,7 @@ def main():
 
         st.markdown(
             """
-    <div class="chart-container" style="margin-top:0;">
+    <div class="card-static" style="margin-top:0;">
       <p style="margin-bottom:0.5rem;">
         This section surfaces additional multiple-choice questions that are not already covered in the main tabs.
         Vendor-specific, numeric-only, and free-text style questions are excluded to keep the view focused on
@@ -1747,7 +1705,6 @@ def main():
             if s_nonnull.empty:
                 continue
             numeric_coerced = pd.to_numeric(s_nonnull, errors="coerce")
-            # skip mainly numeric questions
             if numeric_coerced.notna().mean() > 0.9:
                 continue
             n_unique = s_nonnull.astype(str).nunique()
@@ -1773,6 +1730,7 @@ def main():
                 title = clean_question_title(col)
 
             def make_chart(pct_df=pct_df, title=title, tool_name=tool_name, n_cat=n_cat):
+                st.markdown('<div class="chart-container">', unsafe_allow_html=True)
                 if n_cat <= 5:
                     donut_chart_clean(pct_df, "category", "pct", title)
                 else:
@@ -1791,8 +1749,9 @@ def main():
                         f"</div>",
                         unsafe_allow_html=True,
                     )
+                st.markdown("</div>", unsafe_allow_html=True)
 
-            render_container_if(True, make_chart)
+            make_chart()
 
         if not extra_questions:
             st.info("No additional summarized categorical questions detected beyond the main dashboard sections.")
